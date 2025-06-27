@@ -22,7 +22,7 @@ import sys
 import numpy as np
 
 # Directory where all results are stored.
-data_path = 'data/fashion'
+data_path = 'data/quick'
 run_path = 'runs'
 idx_digits = 3
 prep_data_fname = 'prep_data.npy'
