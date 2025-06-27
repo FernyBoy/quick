@@ -198,20 +198,20 @@ def train_network(prefix, es):
         classifier = Model(input_cla, classified, name='classifier')
         classifier.compile(
             loss = 'categorical_crossentropy', optimizer = 'adam',
-            metrics = 'accuracy')
+            metrics = ['accuracy'])
         classifier.summary()
         input_dec, decoded = get_decoder()
         decoder = Model(input_dec, decoded, name='decoder')
         decoder.compile(
-            optimizer = 'adam', loss = 'mean_squared_error', metrics = rmse)
+            optimizer = 'adam', loss = 'mean_squared_error', metrics = [rmse])
         decoder.summary()
         encoded = encoder(input_data)
         decoded = decoder(encoded)
         classified = classifier(encoded)
         full_classifier = Model(inputs=input_data, outputs=classified, name='full_classifier')
-        full_classifier.compile(optimizer = 'adam', loss = 'categorical_crossentropy', metrics = 'accuracy') 
+        full_classifier.compile(optimizer = 'adam', loss = 'categorical_crossentropy', metrics = ['accuracy']) 
         autoencoder = Model(inputs = input_data, outputs=decoded, name='autoencoder')
-        autoencoder.compile(loss='huber', optimizer='adam', metrics=rmse)
+        autoencoder.compile(loss='huber', optimizer='adam', metrics=[rmse])
 
         model = Model(inputs=input_data, outputs=[classified, decoded])
         model.compile(loss=['categorical_crossentropy', 'mean_squared_error'],
@@ -235,7 +235,9 @@ def train_network(prefix, es):
         history = autoencoder.evaluate(testing_data, testing_data, return_dict=True)
         histories.append(history)
         encoder.save(constants.encoder_filename(prefix, es, fold))
+        # encoder.save(f"runs/model-encoder-fld_{fold:03d}.keras")
         decoder.save(constants.decoder_filename(prefix, es, fold))
+        #decoder.save("runs/model-decoder-fld_000.keras")
         classifier.save(constants.classifier_filename(prefix, es, fold))
         prediction_prefix = constants.classification_name(es)
         prediction_filename = constants.data_filename(prediction_prefix, es, fold)

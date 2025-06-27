@@ -1,0 +1,5 @@
+conda create -n mem python=3 tensorflow-gpu
+
+activate mem
+
+conda install matplotlib seaborn pypng joblib docopt

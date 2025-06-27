@@ -85,7 +85,7 @@ learning_suffixes = [[original_suffix], [agreed_suffix], [amsystem_suffix],
 
 # Number of columns in memory
 domain = 256
-n_folds = 10
+n_folds = 1
 n_jobs = 1
 dreaming_cycles = 6
 
@@ -274,6 +274,7 @@ def create_directory(path):
     except FileExistsError:
         print(f'Directory {path} already exists.')
     
+
 def filename(name_prefix, es = None, fold = None, extension = ''):
     """ Returns a file name in run_path directory with a given extension and an index
     """
@@ -285,6 +286,18 @@ def filename(name_prefix, es = None, fold = None, extension = ''):
         pass
     return run_path + '/' + get_full_name(name_prefix,es) \
         + fold_suffix(fold) + extension
+
+# def filename(name_prefix, es=None, fold=None, extension='.keras'):
+#     """ Returns a file name in run_path directory with a given extension and an index """
+#     # Construcción del nombre base
+#     name = name_prefix
+
+#     if es is not None:
+#         name += f'_es_{es:03d}'
+#     if fold is not None:
+#         name += f'_fld_{fold:03d}'
+
+#     return f'runs/{name}{extension}'
 
 def csv_filename(name_prefix, es = None, fold = None):
     return filename(name_prefix, es, fold, '.csv')
@@ -324,13 +337,13 @@ def model_filename(name_prefix, es, fold):
     return filename(name_prefix, es, fold)
 
 def encoder_filename(name_prefix, es, fold):
-    return filename(name_prefix + encoder_suffix, es, fold)
+    return filename(name_prefix + encoder_suffix, es, fold) + ".keras"
 
 def classifier_filename(name_prefix, es, fold):
-    return filename(name_prefix + classifier_suffix, es, fold)
+    return filename(name_prefix + classifier_suffix, es, fold) + ".keras"
 
 def decoder_filename(name_prefix, es, fold):
-    return filename(name_prefix + decoder_suffix, es, fold)
+    return filename(name_prefix + decoder_suffix, es, fold) + ".keras"
 
 def memory_confrix_filename(fill, es, fold):
     prefix = mem_conf_prefix + int_suffix(fill, 'fll')
