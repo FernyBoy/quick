@@ -350,13 +350,15 @@ def get_ams_results(
         domain, msize, p[constants.xi_idx], p[constants.sigma_idx],
         p[constants.iota_idx], p[constants.kappa_idx])
 
-    # EXPERIMENT MODIFICATION: Only train with label 0
-    # Create a mask to filter only the samples with label 0
-    known_label_mask = (trl == 0)
+    # EXPERIMENT MODIFICATION: Only train with the first half of labels
+    known_threshold = constants.n_labels // 2
+    # Create a mask to filter only the samples with labels in the first half
+    known_label_mask = (trl < known_threshold)
     trf_filtered = trf_rounded[known_label_mask]
 
+    print(f'Total labels: {constants.n_labels}. Known threshold: {known_threshold}')
     print(f'Original filling set size: {len(trf_rounded)}')
-    print(f'Filtered filling set size (only label 0): {len(trf_filtered)}')
+    print(f'Filtered filling set size (labels < {known_threshold}): {len(trf_filtered)}')
 
     # Registrate filling data.
     for features in trf_filtered:
