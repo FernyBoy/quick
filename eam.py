@@ -350,15 +350,29 @@ def get_ams_results(
         domain, msize, p[constants.xi_idx], p[constants.sigma_idx],
         p[constants.iota_idx], p[constants.kappa_idx])
 
+    # EXPERIMENT MODIFICATION: Only train with label 0
+    # Create a mask to filter only the samples with label 0
+    known_label_mask = (trl == 0)
+    trf_filtered = trf_rounded[known_label_mask]
+
+    print(f'Original filling set size: {len(trf_rounded)}')
+    print(f'Filtered filling set size (only label 0): {len(trf_filtered)}')
+
     # Registrate filling data.
-    for features in trf_rounded:
+    for features in trf_filtered:
         eam.register(features)
 
-    # Recognize test data.
+    # Recognize test data (using all labels).
     confrix, behaviour = recognize_by_memory(
         eam, tef_rounded, tel, msize, min_value, max_value, classifier)
+    
+    # If there are no responses, precision is undefined. Let's set it to 0.
     responses = len(tel) - behaviour[constants.no_response_idx]
-    precision = behaviour[constants.correct_response_idx]/float(responses)
+    if responses > 0:
+        precision = behaviour[constants.correct_response_idx] / float(responses)
+    else:
+        precision = 0.0  # Avoid division by zero
+
     recall = behaviour[constants.correct_response_idx]/float(len(tel))
     behaviour[constants.precision_idx] = precision
     behaviour[constants.recall_idx] = recall
@@ -405,6 +419,12 @@ def test_memory_sizes(domain, es):
         filling_labels = np.load(filling_labels_filename)
         testing_features = np.load(testing_features_filename)
         testing_labels = np.load(testing_labels_filename)
+
+        # Convert labels from one-hot back to integer format
+        if filling_labels.ndim > 1:
+            filling_labels = np.argmax(filling_labels, axis=1)
+        if testing_labels.ndim > 1:
+            testing_labels = np.argmax(testing_labels, axis=1)
 
         behaviours = np.zeros(
             (len(constants.memory_sizes), constants.n_behaviours))
@@ -534,6 +554,12 @@ def test_filling_per_fold(mem_size, domain, es, fold):
     filling_labels = np.load(filling_labels_filename)
     testing_features = np.load(testing_features_filename)
     testing_labels = np.load(testing_labels_filename)
+
+    # Convert labels from one-hot back to integer format
+    if filling_labels.ndim > 1:
+        filling_labels = np.argmax(filling_labels, axis=1)
+    if testing_labels.ndim > 1:
+        testing_labels = np.argmax(testing_labels, axis=1)
 
     max_value = maximum((filling_features, testing_features))
     min_value = minimum((filling_features, testing_features))

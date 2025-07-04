@@ -17,7 +17,7 @@ import numpy as np
 import os
 import random
 import constants
-
+import keras
 
 # This code is an abstraction for the MNIST Fashion dataset,
 columns = 28
@@ -64,6 +64,10 @@ def _get_segment(segment, fold, noised = False):
             if noised \
                 else constants.get_data_in_range(_get_segment.data, n, m)
     labels = constants.get_data_in_range(_get_segment.labels, n, m)
+    
+    # Convert labels to one-hot encoding
+    labels = keras.utils.to_categorical(labels, num_classes=constants.n_labels)
+    
     return data, labels
 
 _get_segment.data = None
@@ -104,7 +108,6 @@ def _load_dataset(path):
         data, labels = _load_quickdraw(path)
         data = data.astype(float)
         noised_data = noised(data, constants.noise_percent)
-        labels = np.concatenate((labels_train, labels_test), axis=0)
         data, noised_data, labels = _shuffle(data, noised_data, labels)
         _save_dataset(data, noised_data, labels, path)
     return data, noised_data, labels
@@ -166,9 +169,13 @@ def _load_quickdraw(path):
     """
     print("Loading QuickDraw .npy files...")
     files = sorted([f for f in os.listdir(path) if f.endswith('.npy')])
+    files = files[:constants.n_labels]  # <-- FIX: Limit files to n_labels
     data_list = []
     labels_list = []
     label_dict = {}
+    minimum_images = -1
+    temp_data_list = []
+    temp_labels_list = []
 
     for label_index, filename in enumerate(files):
         full_path = os.path.join(path, filename)
@@ -177,10 +184,19 @@ def _load_quickdraw(path):
 
         print(f"Loading {class_name}...")
         images = np.load(full_path)  # shape: (N, 784)
+        if minimum_images == -1:
+            minimum_images = images.shape[0]
+        elif images.shape[0] < minimum_images:
+            minimum_images = images.shape[0]
         images = images.astype(float).reshape(-1, 28, 28)
 
-        data_list.append(images)
-        labels_list.append(np.full(len(images), label_index, dtype=int))
+        temp_data_list.append(images)
+        temp_labels_list.append(np.full(len(images), label_index, dtype=int))
+
+    print(minimum_images)
+    for data, labels in zip(temp_data_list, temp_labels_list):
+        data_list.append(data[:minimum_images])
+        labels_list.append(labels[:minimum_images])
 
     data = np.concatenate(data_list, axis=0)
     labels = np.concatenate(labels_list, axis=0)
