@@ -1,0 +1,115 @@
+  ---
+
+  Resumen de Cambios
+
+
+  1. constants.py
+
+  Este archivo se modificó para controlar el número de categorías (clases) utilizadas en todo el proyecto.
+
+
+   * Cambio 1: Reducción de categorías a 2.
+       * Línea modificada: n_labels = 10 se cambió por n_labels = 2.
+       * Propósito: Configurar el primer experimento "conocido vs. desconocido" con solo dos categorías.
+
+
+   * Cambio 2: Aumento de categorías a 4.
+       * Línea modificada: n_labels = 2 se cambió por n_labels = 4.
+       * Propósito: Preparar el segundo experimento, utilizando 4 categorías (2 conocidas y 2 desconocidas), según la nueva solicitud.
+
+
+  2. dataset.py
+
+
+  Este archivo se modificó para asegurar que los datos se cargaran y procesaran correctamente según el número de categorías definido en
+  constants.py.
+
+
+   * Cambio 1: Importación de `to_categorical`.
+       * Línea añadida: from tensorflow.keras.utils import to_categorical
+       * Propósito: Importar la herramienta necesaria para convertir las etiquetas numéricas (ej: 1) a formato "one-hot" (ej: [0, 1, 0, 0]).
+
+
+   * Cambio 2: Conversión de etiquetas a "one-hot".
+       * Líneas añadidas en la función `_get_segment`:
+
+
+   1         # Convert labels to one-hot encoding
+   2         labels = to_categorical(labels, num_classes=constants.n_labels)
+
+       * Propósito: Solucionar el error de ValueError durante el entrenamiento, asegurando que las etiquetas de datos tuvieran la misma forma
+         que la capa de salida de la red neuronal.
+
+
+   * Cambio 3: Limitar la carga de archivos de datos.
+       * Línea añadida en la función `_load_quickdraw`:
+
+
+   1         files = files[:constants.n_labels]
+
+       * Propósito: Solucionar el problema donde el script cargaba las 10 categorías originales desde los archivos .npy sin importar el valor
+         de n_labels. Este cambio fuerza al script a cargar solo la cantidad correcta de archivos de categorías.
+
+
+  3. neural_net.py
+
+  Este archivo se modificó para eliminar una conversión de datos redundante que causaba un error de dimensiones.
+
+
+   * Cambio 1: Eliminación de conversión "one-hot" duplicada.
+       * Líneas eliminadas de la función `train_network`:
+
+
+   1         training_labels = to_categorical(training_labels)
+   2         validation_labels = to_categorical(validation_labels)
+   3         testing_labels = to_categorical(testing_labels)
+
+       * Propósito: Arreglar el error ValueError de rangos (ndim) que ocurría porque las etiquetas se estaban convirtiendo a "one-hot" dos
+         veces (una en dataset.py y otra aquí).
+
+  4. eam.py
+
+
+  Este archivo contiene la lógica principal de los experimentos y fue donde implementamos y depuramos la lógica de "conocido vs.
+  desconocido".
+
+
+   * Cambio 1: Implementación inicial del experimento.
+       * Lógica modificada en `get_ams_results`: Se cambió el bucle de registro para que solo utilizara datos donde la etiqueta fuera 0.
+
+
+   1         # OLD
+   2         for features in trf_rounded:
+   3             eam.register(features)
+   4
+   5         # NEW
+   6         known_label_mask = (trl == 0)
+   7         trf_filtered = trf_rounded[known_label_mask]
+   8         for features in trf_filtered:
+   9             eam.register(features)
+
+       * Propósito: Implementar la condición central del primer experimento: entrenar la memoria solo con una categoría.
+
+
+   * Cambio 2: Corrección de indexación en `test_memory_sizes`.
+       * Líneas añadidas: Se añadió la conversión de etiquetas de "one-hot" a enteros usando np.argmax.
+
+
+   1         if filling_labels.ndim > 1:
+   2             filling_labels = np.argmax(filling_labels, axis=1)
+   3         if testing_labels.ndim > 1:
+   4             testing_labels = np.argmax(testing_labels, axis=1)
+
+       * Propósito: Solucionar el IndexError que ocurría porque el código intentaba usar un array "one-hot" como índice para una máscara
+         booleana.
+
+
+   * Cambio 3: Corrección de indexación en `test_filling_per_fold`.
+       * Líneas añadidas: Se aplicó la misma conversión con np.argmax en esta función.
+       * Propósito: Solucionar el mismo IndexError que aparecía en la segunda fase de la evaluación (test_memory_fills).
+
+
+   * Cambio 4: Generalización de la lógica del experimento.
+       * Lógica modificada en `get_ams_results`: Se cambió la condición de trl == 0 a trl < constants.n_labels // 2.
+       * Propósito: Hacer que la lógica del experimento fuera flexible, permitiendo que funcionara con cualquier número par de categorías
+         (entrenando siempre con la primera mitad).
