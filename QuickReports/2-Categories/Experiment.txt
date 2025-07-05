@@ -1,0 +1,343 @@
+  python eam.py -e 1
+2025-07-04 23:27:09.545520: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2025-07-04 23:27:09.551872: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:485] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2025-07-04 23:27:09.559459: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:8454] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2025-07-04 23:27:09.561966: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1452] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2025-07-04 23:27:09.567986: I tensorflow/core/platform/cpu_feature_guard.cc:210] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: SSE4.1 SSE4.2 AVX AVX2 AVX512F AVX512_VNNI AVX512_BF16 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+Working directory: runs
+Experimental settings: {Parameters: [0.  0.  0.  0.1]}
+Memory size (columns): 256
+Testing the memory
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1751693230.728459  785211 cuda_executor.cc:1015] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+I0000 00:00:1751693230.745382  785211 cuda_executor.cc:1015] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+I0000 00:00:1751693230.747628  785211 cuda_executor.cc:1015] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+I0000 00:00:1751693230.750944  785211 cuda_executor.cc:1015] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+I0000 00:00:1751693230.753089  785211 cuda_executor.cc:1015] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+I0000 00:00:1751693230.755302  785211 cuda_executor.cc:1015] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+I0000 00:00:1751693230.845395  785211 cuda_executor.cc:1015] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+I0000 00:00:1751693230.846496  785211 cuda_executor.cc:1015] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+I0000 00:00:1751693230.847383  785211 cuda_executor.cc:1015] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2025-07-04 23:27:10.848258: I tensorflow/core/common_runtime/gpu/gpu_device.cc:2021] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 6123 MB memory:  -> device: 0, name: NVIDIA GeForce RTX 4070 Laptop GPU, pci bus id: 0000:01:00.0, compute capability: 8.9
+/home/Ferny/anaconda3/envs/mem/lib/python3.12/site-packages/keras/src/saving/saving_lib.py:719: UserWarning: Skipping variable loading for optimizer 'adam', because it has 14 variables whereas the saved optimizer has 2 variables.
+  saveable.load_own_variables(weights_store.get(inner_path))
+Fold: 0
+Memory size: 1
+{iota: 0.0, kappa: 0.0, xi: 0.0, sigma: 0.1}
+Total labels: 2. Known threshold: 1
+Original filling set size: 49360
+Filtered filling set size (labels < 1): 24680
+I0000 00:00:1751693250.452206  785283 service.cc:146] XLA service 0x7fdce40171f0 initialized for platform CUDA (this does not guarantee that XLA will be used). Devices:
+I0000 00:00:1751693250.452236  785283 service.cc:154]   StreamExecutor device (0): NVIDIA GeForce RTX 4070 Laptop GPU, Compute Capability 8.9
+2025-07-04 23:27:30.454885: I tensorflow/compiler/mlir/tensorflow/utils/dump_mlir_util.cc:268] disabling MLIR crash reproducer, set env var `MLIR_CRASH_REPRODUCER_DIRECTORY` to enable.
+2025-07-04 23:27:30.465274: I external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:531] Loaded cuDNN version 90101
+I0000 00:00:1751693250.995624  785283 device_compiler.h:188] Compiled cluster using XLA!  This line is logged at most once for the lifetime of the process.
+772/772 ━━━━━━━━━━━━━━━━━━━━ 1s 950us/step
+Confusion matrix:
+[[12320     0]
+ [12360     0]]
+Behaviour: [    0.     0.     0.     0.     0. 12360. 12320.]
+Memory size: 2
+{iota: 0.0, kappa: 0.0, xi: 0.0, sigma: 0.1}
+Total labels: 2. Known threshold: 1
+Original filling set size: 49360
+Filtered filling set size (labels < 1): 24680
+772/772 ━━━━━━━━━━━━━━━━━━━━ 0s 326us/step
+Confusion matrix:
+[[12086   234]
+ [  221 12139]]
+Behaviour: [    0.     0.     0.     0.     0.   455. 24225.]
+Memory size: 4
+{iota: 0.0, kappa: 0.0, xi: 0.0, sigma: 0.1}
+Total labels: 2. Known threshold: 1
+Original filling set size: 49360
+Filtered filling set size (labels < 1): 24680
+770/770 ━━━━━━━━━━━━━━━━━━━━ 1s 832us/step
+Confusion matrix:
+[[12058   256]
+ [  244 12062]]
+Behaviour: [    0.     0.     0.     0.    60.   500. 24120.]
+Memory size: 8
+{iota: 0.0, kappa: 0.0, xi: 0.0, sigma: 0.1}
+Total labels: 2. Known threshold: 1
+Original filling set size: 49360
+Filtered filling set size (labels < 1): 24680
+709/745 ━━━━━━━━━━━━━━━━━━━━ 0s 354us/step2025-07-04 23:28:53.970047: I external/local_xla/xla/stream_executor/cuda/cuda_asm_compiler.cc:393] ptxas warning : Registers are spilled to local memory in function 'gemm_fusion_dot_23', 4 bytes spill stores, 4 bytes spill loads
+
+745/745 ━━━━━━━━━━━━━━━━━━━━ 1s 978us/step
+Confusion matrix:
+[[12129   173]
+ [ 1820  9708]]
+Behaviour: [    0.     0.     0.     0.   850.  1993. 21837.]
+Memory size: 16
+{iota: 0.0, kappa: 0.0, xi: 0.0, sigma: 0.1}
+Total labels: 2. Known threshold: 1
+Original filling set size: 49360
+Filtered filling set size (labels < 1): 24680
+618/726 ━━━━━━━━━━━━━━━━━━━━ 0s 325us/step2025-07-04 23:29:42.792565: I external/local_xla/xla/stream_executor/cuda/cuda_asm_compiler.cc:393] ptxas warning : Registers are spilled to local memory in function 'gemm_fusion_dot_23', 4 bytes spill stores, 4 bytes spill loads
+
+726/726 ━━━━━━━━━━━━━━━━━━━━ 1s 1ms/step
+Confusion matrix:
+[[12141   139]
+ [ 2049  8890]]
+Behaviour: [    0.     0.     0.     0.  1461.  2188. 21031.]
+Memory size: 32
+{iota: 0.0, kappa: 0.0, xi: 0.0, sigma: 0.1}
+Total labels: 2. Known threshold: 1
+Original filling set size: 49360
+Filtered filling set size (labels < 1): 24680
+683/683 ━━━━━━━━━━━━━━━━━━━━ 1s 933us/step
+Confusion matrix:
+[[12184    70]
+ [ 3119  6457]]
+Behaviour: [    0.     0.     0.     0.  2850.  3189. 18641.]
+Memory size: 64
+{iota: 0.0, kappa: 0.0, xi: 0.0, sigma: 0.1}
+Total labels: 2. Known threshold: 1
+Original filling set size: 49360
+Filtered filling set size (labels < 1): 24680
+630/630 ━━━━━━━━━━━━━━━━━━━━ 0s 310us/step
+Confusion matrix:
+[[12172    24]
+ [ 4301  3650]]
+Behaviour: [    0.     0.     0.     0.  4533.  4325. 15822.]
+Memory size: 128
+{iota: 0.0, kappa: 0.0, xi: 0.0, sigma: 0.1}
+Total labels: 2. Known threshold: 1
+Original filling set size: 49360
+Filtered filling set size (labels < 1): 24680
+539/554 ━━━━━━━━━━━━━━━━━━━━ 0s 280us/step2025-07-04 23:36:15.433199: I external/local_xla/xla/stream_executor/cuda/cuda_asm_compiler.cc:393] ptxas warning : Registers are spilled to local memory in function 'gemm_fusion_dot_23', 4 bytes spill stores, 4 bytes spill loads
+
+554/554 ━━━━━━━━━━━━━━━━━━━━ 1s 1ms/step
+Confusion matrix:
+[[12041    11]
+ [ 4348  1326]]
+Behaviour: [    0.     0.     0.     0.  6954.  4359. 13367.]
+Memory size: 256
+{iota: 0.0, kappa: 0.0, xi: 0.0, sigma: 0.1}
+Total labels: 2. Known threshold: 1
+Original filling set size: 49360
+Filtered filling set size (labels < 1): 24680
+419/488 ━━━━━━━━━━━━━━━━━━━━ 0s 360us/step2025-07-04 23:41:52.553011: I external/local_xla/xla/stream_executor/cuda/cuda_asm_compiler.cc:393] ptxas warning : Registers are spilled to local memory in function 'gemm_fusion_dot_23', 4 bytes spill stores, 4 bytes spill loads
+
+488/488 ━━━━━━━━━━━━━━━━━━━━ 1s 1ms/step
+Confusion matrix:
+[[11783     5]
+ [ 3129   694]]
+Behaviour: [    0.     0.     0.     0.  9069.  3134. 12477.]
+Memory size: 512
+{iota: 0.0, kappa: 0.0, xi: 0.0, sigma: 0.1}
+Total labels: 2. Known threshold: 1
+Original filling set size: 49360
+Filtered filling set size (labels < 1): 24680
+295/420 ━━━━━━━━━━━━━━━━━━━━ 0s 341us/step2025-07-04 23:51:21.022189: I external/local_xla/xla/stream_executor/cuda/cuda_asm_compiler.cc:393] ptxas warning : Registers are spilled to local memory in function 'gemm_fusion_dot_23', 4 bytes spill stores, 4 bytes spill loads
+
+420/420 ━━━━━━━━━━━━━━━━━━━━ 1s 2ms/step
+Confusion matrix:
+[[11237     8]
+ [ 1866   320]]
+Behaviour: [    0.     0.     0.     0. 11249.  1874. 11557.]
+Memory size: 1024
+{iota: 0.0, kappa: 0.0, xi: 0.0, sigma: 0.1}
+Total labels: 2. Known threshold: 1
+Original filling set size: 49360
+Filtered filling set size (labels < 1): 24680
+355/355 ━━━━━━━━━━━━━━━━━━━━ 0s 507us/step
+Confusion matrix:
+[[10213     3]
+ [  966   147]]
+Behaviour: [    0.     0.     0.     0. 13351.   969. 10360.]
+Memory size evaluation completed!
+Best memory sizes: [2, 4, 8]
+{iota: 0.0, kappa: 0.0, xi: 0.0, sigma: 0.1}
+/home/Ferny/anaconda3/envs/mem/lib/python3.12/site-packages/keras/src/saving/saving_lib.py:719: UserWarning: Skipping variable loading for optimizer 'adam', because it has 14 variables whereas the saved optimizer has 2 variables.
+  saveable.load_own_variables(weights_store.get(inner_path))
+Filling from 0 to 494.
+Filling of memories done at 1.0%
+772/772 ━━━━━━━━━━━━━━━━━━━━ 1s 519us/step
+Confusion matrix:
+[[12086   234]
+ [  221 12139]]
+Behaviour: [    0.     0.     0.     0.     0.   455. 24225.]
+Filling from 494 to 987.
+Filling of memories done at 2.0%
+772/772 ━━━━━━━━━━━━━━━━━━━━ 0s 305us/step
+Confusion matrix:
+[[12086   234]
+ [  221 12139]]
+Behaviour: [    0.     0.     0.     0.     0.   455. 24225.]
+Filling from 987 to 1974.
+Filling of memories done at 4.0%
+772/772 ━━━━━━━━━━━━━━━━━━━━ 0s 285us/step
+Confusion matrix:
+[[12086   234]
+ [  221 12139]]
+Behaviour: [    0.     0.     0.     0.     0.   455. 24225.]
+Filling from 1974 to 3949.
+Filling of memories done at 8.0%
+772/772 ━━━━━━━━━━━━━━━━━━━━ 0s 329us/step
+Confusion matrix:
+[[12085   235]
+ [  221 12139]]
+Behaviour: [    0.     0.     0.     0.     0.   456. 24224.]
+Filling from 3949 to 7898.
+Filling of memories done at 16.0%
+772/772 ━━━━━━━━━━━━━━━━━━━━ 0s 301us/step
+Confusion matrix:
+[[12086   234]
+ [  221 12139]]
+Behaviour: [    0.     0.     0.     0.     0.   455. 24225.]
+Filling from 7898 to 15795.
+Filling of memories done at 32.0%
+772/772 ━━━━━━━━━━━━━━━━━━━━ 0s 299us/step
+Confusion matrix:
+[[12086   234]
+ [  221 12139]]
+Behaviour: [    0.     0.     0.     0.     0.   455. 24225.]
+Filling from 15795 to 31590.
+Filling of memories done at 64.0%
+772/772 ━━━━━━━━━━━━━━━━━━━━ 0s 304us/step
+Confusion matrix:
+[[12086   234]
+ [  221 12139]]
+Behaviour: [    0.     0.     0.     0.     0.   455. 24225.]
+Filling from 31590 to 49360.
+Filling of memories done at 100.0%
+772/772 ━━━━━━━━━━━━━━━━━━━━ 0s 324us/step
+Confusion matrix:
+[[12086   234]
+ [  221 12139]]
+Behaviour: [    0.     0.     0.     0.     0.   455. 24225.]
+Filling test completed for fold 0
+Testing fillings for memory size 2 done.
+{iota: 0.0, kappa: 0.0, xi: 0.0, sigma: 0.1}
+/home/Ferny/anaconda3/envs/mem/lib/python3.12/site-packages/keras/src/saving/saving_lib.py:719: UserWarning: Skipping variable loading for optimizer 'adam', because it has 14 variables whereas the saved optimizer has 2 variables.
+  saveable.load_own_variables(weights_store.get(inner_path))
+Filling from 0 to 494.
+Filling of memories done at 1.0%
+758/758 ━━━━━━━━━━━━━━━━━━━━ 1s 555us/step
+Confusion matrix:
+[[11937   235]
+ [  278 11793]]
+Behaviour: [    0.     0.     0.     0.   437.   513. 23730.]
+Filling from 494 to 987.
+Filling of memories done at 2.0%
+764/764 ━━━━━━━━━━━━━━━━━━━━ 0s 300us/step
+Confusion matrix:
+[[12038   234]
+ [  279 11884]]
+Behaviour: [    0.     0.     0.     0.   245.   513. 23922.]
+Filling from 987 to 1974.
+Filling of memories done at 4.0%
+770/770 ━━━━━━━━━━━━━━━━━━━━ 1s 888us/step
+Confusion matrix:
+[[12032   258]
+ [  260 12067]]
+Behaviour: [    0.     0.     0.     0.    63.   518. 24099.]
+Filling from 1974 to 3949.
+Filling of memories done at 8.0%
+771/771 ━━━━━━━━━━━━━━━━━━━━ 1s 866us/step
+Confusion matrix:
+[[12063   252]
+ [  260 12075]]
+Behaviour: [    0.     0.     0.     0.    30.   512. 24138.]
+Filling from 3949 to 7898.
+Filling of memories done at 16.0%
+771/771 ━━━━━━━━━━━━━━━━━━━━ 1s 866us/step
+Confusion matrix:
+[[12041   274]
+ [  246 12095]]
+Behaviour: [0.0000e+00 0.0000e+00 0.0000e+00 0.0000e+00 2.4000e+01 5.2000e+02
+ 2.4136e+04]
+Filling from 7898 to 15795.
+Filling of memories done at 32.0%
+646/771 ━━━━━━━━━━━━━━━━━━━━ 0s 311us/step2025-07-05 00:12:42.545498: I external/local_xla/xla/stream_executor/cuda/cuda_asm_compiler.cc:393] ptxas warning : Registers are spilled to local memory in function 'gemm_fusion_dot_23', 4 bytes spill stores, 4 bytes spill loads
+
+771/771 ━━━━━━━━━━━━━━━━━━━━ 1s 902us/step
+Confusion matrix:
+[[12067   248]
+ [  250 12104]]
+Behaviour: [0.0000e+00 0.0000e+00 0.0000e+00 0.0000e+00 1.1000e+01 4.9800e+02
+ 2.4171e+04]
+Filling from 15795 to 31590.
+Filling of memories done at 64.0%
+772/772 ━━━━━━━━━━━━━━━━━━━━ 1s 755us/step
+Confusion matrix:
+[[12054   264]
+ [  249 12107]]
+Behaviour: [0.0000e+00 0.0000e+00 0.0000e+00 0.0000e+00 6.0000e+00 5.1300e+02
+ 2.4161e+04]
+Filling from 31590 to 49360.
+Filling of memories done at 100.0%
+772/772 ━━━━━━━━━━━━━━━━━━━━ 1s 864us/step
+Confusion matrix:
+[[12058   262]
+ [  244 12115]]
+Behaviour: [0.0000e+00 0.0000e+00 0.0000e+00 0.0000e+00 1.0000e+00 5.0600e+02
+ 2.4173e+04]
+Filling test completed for fold 0
+Testing fillings for memory size 4 done.
+{iota: 0.0, kappa: 0.0, xi: 0.0, sigma: 0.1}
+/home/Ferny/anaconda3/envs/mem/lib/python3.12/site-packages/keras/src/saving/saving_lib.py:719: UserWarning: Skipping variable loading for optimizer 'adam', because it has 14 variables whereas the saved optimizer has 2 variables.
+  saveable.load_own_variables(weights_store.get(inner_path))
+Filling from 0 to 494.
+Filling of memories done at 1.0%
+608/695 ━━━━━━━━━━━━━━━━━━━━ 0s 331us/step2025-07-05 00:14:06.153238: I external/local_xla/xla/stream_executor/cuda/cuda_asm_compiler.cc:393] ptxas warning : Registers are spilled to local memory in function 'gemm_fusion_dot_23', 4 bytes spill stores, 4 bytes spill loads
+
+695/695 ━━━━━━━━━━━━━━━━━━━━ 1s 1ms/step
+Confusion matrix:
+[[11348   238]
+ [ 2100  8547]]
+Behaviour: [    0.     0.     0.     0.  2447.  2338. 19895.]
+Filling from 494 to 987.
+Filling of memories done at 2.0%
+731/731 ━━━━━━━━━━━━━━━━━━━━ 0s 524us/step
+Confusion matrix:
+[[11717   251]
+ [ 2204  9218]]
+Behaviour: [    0.     0.     0.     0.  1290.  2455. 20935.]
+Filling from 987 to 1974.
+Filling of memories done at 4.0%
+748/748 ━━━━━━━━━━━━━━━━━━━━ 1s 764us/step
+Confusion matrix:
+[[11738   393]
+ [ 1629 10147]]
+Behaviour: [    0.     0.     0.     0.   773.  2022. 21885.]
+Filling from 1974 to 3949.
+Filling of memories done at 8.0%
+762/762 ━━━━━━━━━━━━━━━━━━━━ 0s 440us/step
+Confusion matrix:
+[[11707   533]
+ [  834 11307]]
+Behaviour: [    0.     0.     0.     0.   299.  1367. 23014.]
+Filling from 3949 to 7898.
+Filling of memories done at 16.0%
+768/768 ━━━━━━━━━━━━━━━━━━━━ 1s 868us/step
+Confusion matrix:
+[[11826   463]
+ [  835 11434]]
+Behaviour: [    0.     0.     0.     0.   122.  1298. 23260.]
+Filling from 7898 to 15795.
+Filling of memories done at 32.0%
+770/770 ━━━━━━━━━━━━━━━━━━━━ 0s 278us/step
+Confusion matrix:
+[[11869   436]
+ [  782 11546]]
+Behaviour: [    0.     0.     0.     0.    47.  1218. 23415.]
+Filling from 15795 to 31590.
+Filling of memories done at 64.0%
+771/771 ━━━━━━━━━━━━━━━━━━━━ 0s 482us/step
+Confusion matrix:
+[[11891   416]
+ [  807 11533]]
+Behaviour: [    0.     0.     0.     0.    33.  1223. 23424.]
+Filling from 31590 to 49360.
+Filling of memories done at 100.0%
+771/771 ━━━━━━━━━━━━━━━━━━━━ 0s 264us/step
+Confusion matrix:
+[[11943   366]
+ [  830 11515]]
+Behaviour: [    0.     0.     0.     0.    26.  1196. 23458.]
+Filling test completed for fold 0
+Testing fillings for memory size 8 done.
