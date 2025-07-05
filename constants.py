@@ -22,7 +22,7 @@ import sys
 import numpy as np
 
 # Directory where all results are stored.
-data_path = 'data/fashion'
+data_path = 'data/quick'
 run_path = 'runs'
 idx_digits = 3
 prep_data_fname = 'prep_data.npy'
@@ -104,7 +104,7 @@ am_filling_percent = 0.20
 am_testing_percent = 0.10
 noise_percent = 50
 
-n_labels = 10
+n_labels = 4
 labels_per_memory = 1
 all_labels = list(range(n_labels))
 label_formats = ['r:v', 'y--d', 'g-.4', 'y-.3', 'k-.8', 'y--^',

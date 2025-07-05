@@ -183,10 +183,6 @@ def train_network(prefix, es):
         training_data = training_data[:truly_training]
         training_labels = training_labels[:truly_training]
 
-        training_labels = to_categorical(training_labels)
-        validation_labels = to_categorical(validation_labels)
-        testing_labels = to_categorical(testing_labels)
-
         rmse = tf.keras.metrics.RootMeanSquaredError()
         input_data = Input(shape=(dataset.columns, dataset.rows, 1))
 
