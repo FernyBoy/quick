@@ -106,7 +106,7 @@ def _load_dataset(path):
     data, noised_data, labels = _preprocessed_dataset(path)
     if (data is None) or (noised_data is None) or (labels is None): 
         data, labels = _load_quickdraw(path)
-        data = data.astype(float)
+        data = data.astype(float) / 255.0
         noised_data = noised(data, constants.noise_percent)
         data, noised_data, labels = _shuffle(data, noised_data, labels)
         _save_dataset(data, noised_data, labels, path)

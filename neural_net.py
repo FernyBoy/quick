@@ -27,7 +27,7 @@ import dataset
 
 batch_size = 32
 epochs = 300
-patience = 7
+patience = 5
 truly_training_percentage = 0.80
 
 def conv_block(entry, layers, filters, dropout, first_block = False):
@@ -87,8 +87,8 @@ def get_decoder():
         dropout /= 2.0
         filters = filters // 2 
         output = BatchNormalization()(output)
-    output = Conv2D(filters = 1, kernel_size=3, strides=1,activation='sigmoid', padding='same')(output)
-    output_img = Rescaling(255.0, name='decoded')(output)
+    output_img = Conv2D(filters = 1, kernel_size=3, strides=1,activation='sigmoid', padding='same')(output)
+    # output_img = Rescaling(255.0, name='decoded')(output)
     return input_mem, output_img
 
 # The number of layers defined in get_classifier.
