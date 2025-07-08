@@ -1,10 +1,11 @@
 __pycache__/
 test/
 tmp/
+data
 runs/
 runs/*
 .vscode/
-quick
+full_numpy_bitmap_*
 nohup.out
 
 # Created by https://www.toptal.com/developers/gitignore/api/windows,macos,linux,python
