@@ -93,7 +93,7 @@ def _noised(image, percent):
         j = random.randrange(columns)
         if (i, j) in noised:
             continue
-        value = random.randrange(255)
+        value = random.rand()
         copy[i,j] = value
         noised.append((i,j))
     return copy       
@@ -106,7 +106,7 @@ def _load_dataset(path):
     data, noised_data, labels = _preprocessed_dataset(path)
     if (data is None) or (noised_data is None) or (labels is None): 
         data, labels = _load_quickdraw(path)
-        data = data.astype(float)
+        data = data.astype(float) / 255.0
         noised_data = noised(data, constants.noise_percent)
         data, noised_data, labels = _shuffle(data, noised_data, labels)
         _save_dataset(data, noised_data, labels, path)
@@ -182,8 +182,8 @@ def _load_quickdraw(path):
         class_name = filename.replace('full_numpy_bitmap_', '').replace('.npy', '')
         label_dict[label_index] = class_name
 
-        print(f"Loading {class_name}...")
-        images = np.load(full_path)  # shape: (N, 784)
+        print(f"Loading {class_name} from {full_path}...")
+        images = np.load(full_path)
         if minimum_images == -1:
             minimum_images = images.shape[0]
         elif images.shape[0] < minimum_images:
