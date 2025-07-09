@@ -93,7 +93,7 @@ def _noised(image, percent):
         j = random.randrange(columns)
         if (i, j) in noised:
             continue
-        value = random.rand()
+        value = random.random()
         copy[i,j] = value
         noised.append((i,j))
     return copy       
