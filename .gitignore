@@ -1,8 +1,8 @@
 __pycache__/
 test/
-runs*
-runs*/
 tmp/
+runs/
+runs/*
 .vscode/
 quick
 nohup.out
