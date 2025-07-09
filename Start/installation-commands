@@ -4,6 +4,8 @@ activate mem
 
 conda install matplotlib seaborn pypng joblib docopt
 
+mkdir -p data/quick
+
 mkdir runs
 
 cp Start/RunFiles/*.csv ../runs
