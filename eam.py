@@ -264,7 +264,10 @@ def minimum(arrays):
 
 
 def msize_features(features, msize, min_value, max_value):
-    return np.round((msize-1)*(features-min_value) / (max_value-min_value)).astype(int)
+    if max_value == min_value:
+        return np.zeros_like(features, dtype=int)
+    else:
+        return np.round((msize-1)*(features-min_value) / (max_value-min_value)).astype(int)
 
 
 def rsize_recall(recall, msize, min_value, max_value):
@@ -349,20 +352,26 @@ def get_ams_results(
     eam = AssociativeMemory(
         domain, msize, p[constants.xi_idx], p[constants.sigma_idx],
         p[constants.iota_idx], p[constants.kappa_idx])
+    
+    if es.experiment_number == 1:
+        # Registrate filling data.
+        for features in trf_rounded:
+            eam.register(features)
 
-    # EXPERIMENT MODIFICATION: Only train with the first half of labels
-    known_threshold = constants.n_labels // 2
-    # Create a mask to filter only the samples with labels in the first half
-    known_label_mask = (trl < known_threshold)
-    trf_filtered = trf_rounded[known_label_mask]
+    elif es.experiment_number == 2:
+        # EXPERIMENT MODIFICATION: Only train with the first half of labels
+        known_threshold = es.num_classes // 2
+        # Create a mask to filter only the samples with labels in the first half
+        known_label_mask = (trl < known_threshold)
+        trf_filtered = trf_rounded[known_label_mask]
 
-    print(f'Total labels: {constants.n_labels}. Known threshold: {known_threshold}')
-    print(f'Original filling set size: {len(trf_rounded)}')
-    print(f'Filtered filling set size (labels < {known_threshold}): {len(trf_filtered)}')
+        print(f'Total labels: {constants.n_labels}. Known threshold: {known_threshold}')
+        print(f'Original filling set size: {len(trf_rounded)}')
+        print(f'Filtered filling set size (labels < {known_threshold}): {len(trf_filtered)}')
 
-    # Registrate filling data.
-    for features in trf_filtered:
-        eam.register(features)
+        # Registrate filling data.
+        for features in trf_filtered:
+            eam.register(features)
 
     # Recognize test data (using all labels).
     confrix, behaviour = recognize_by_memory(
@@ -379,7 +388,6 @@ def get_ams_results(
     behaviour[constants.precision_idx] = precision
     behaviour[constants.recall_idx] = recall
     return midx, eam.entropy, behaviour, confrix
-
 
 def test_memory_sizes(domain, es):
     all_entropies = []
@@ -1153,6 +1161,9 @@ if __name__ == "__main__":
             print(f'Invalid classes number: {classes}, must be an even number')
             sys.exit(1)
 
+        exp_settings.experiment_number = experiment
+        exp_settings.num_classes = classes
+
         if experiment == 1:
             run_evaluation(exp_settings)
         elif experiment == 2:
@@ -1161,3 +1172,7 @@ if __name__ == "__main__":
         generate_memories(exp_settings)
     elif args['-d']:
         dream(exp_settings)
+
+
+
+

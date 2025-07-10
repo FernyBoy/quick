@@ -142,9 +142,16 @@ class ExperimentSettings:
             shape = params.shape
             assert(shape[0] == 4)
             self.mem_params = params
+        self.experiment_number = None
+        self.num_classes = None
 
     def __str__(self):
-        s = '{Parameters: ' + str(self.mem_params) + '}'
+        s = '{Parameters: ' + str(self.mem_params)
+        if self.experiment_number is not None:
+            s += f', Experiment: {self.experiment_number}'
+        if self.num_classes is not None:
+            s += f', Classes: {self.num_classes}'
+        s += '}'
         return s
 
 def print_warning(*s):
