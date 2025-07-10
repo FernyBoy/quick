@@ -17,7 +17,7 @@
 
 Usage:
   eam -h | --help
-  eam (-n | -f | -e <experiment> | -r | -d) [--domain=DOMAIN] [--runpath=PATH ] [ -l (en | es) ]
+  eam (-n | -f | -e <experiment> <classes> | -r | -d) [--domain=DOMAIN] [--runpath=PATH ] [ -l (en | es) ]
 
 Options:
   -h    Show this screen.
@@ -1139,10 +1139,24 @@ if __name__ == "__main__":
         produce_features_from_data(exp_settings)
     elif args['-e']:
         experiment = int(args['<experiment>'])
+        classes = int(args['<classes>'])
+
+        if experiment != 1 and experiment != 2:
+            print(f'Experiment number not valid: {experiment}')
+            sys.exit(1)
+
+        if classes < 1:
+            print(f'Invalid classes number: {classes}')
+            sys.exit(1)
+        
+        if experiment == 2 and classes % 2 != 0:
+            print(f'Invalid classes number: {classes}, must be an even number')
+            sys.exit(1)
+
         if experiment == 1:
             run_evaluation(exp_settings)
-        else:
-            print(f'Experiment number not valid: {experiment}')
+        elif experiment == 2:
+            print('Trying exp 2')
     elif args['-r']:
         generate_memories(exp_settings)
     elif args['-d']:
