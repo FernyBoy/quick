@@ -104,7 +104,7 @@ am_filling_percent = 0.20
 am_testing_percent = 0.10
 noise_percent = 50
 
-n_labels = 4
+n_labels = 2
 labels_per_memory = 1
 all_labels = list(range(n_labels))
 label_formats = ['r:v', 'y--d', 'g-.4', 'y-.3', 'k-.8', 'y--^',
@@ -144,6 +144,7 @@ class ExperimentSettings:
             self.mem_params = params
         self.experiment_number = None
         self.num_classes = None
+        self.experiment_run_path = None
 
     def __str__(self):
         s = '{Parameters: ' + str(self.mem_params)
@@ -151,6 +152,8 @@ class ExperimentSettings:
             s += f', Experiment: {self.experiment_number}'
         if self.num_classes is not None:
             s += f', Classes: {self.num_classes}'
+        if self.experiment_run_path is not None:
+            s += f', Run Path: {self.experiment_run_path}'
         s += '}'
         return s
 
@@ -285,13 +288,18 @@ def create_directory(path):
 def filename(name_prefix, es = None, fold = None, extension = ''):
     """ Returns a file name in run_path directory with a given extension and an index
     """
+    # Determine the base run path
+    base_run_path = run_path
+    if es is not None and es.experiment_run_path is not None:
+        base_run_path = es.experiment_run_path
+
     # Create target directory & all intermediate directories if don't exists
     try:
-        os.makedirs(run_path)
-        print("Directory " , run_path ,  " created ")
+        os.makedirs(base_run_path)
+        print("Directory " , base_run_path ,  " created ")
     except FileExistsError:
         pass
-    return run_path + '/' + get_full_name(name_prefix,es) \
+    return base_run_path + '/' + get_full_name(name_prefix,es) \
         + fold_suffix(fold) + extension
 
 # def filename(name_prefix, es=None, fold=None, extension='.keras'):

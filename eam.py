@@ -354,8 +354,15 @@ def get_ams_results(
         p[constants.iota_idx], p[constants.kappa_idx])
     
     if es.experiment_number == 1:
+        # Experiment 1: Use the specified number of classes for training
+        known_threshold = es.num_classes
+        known_label_mask = (trl < known_threshold)
+        trf_to_register = trf_rounded[known_label_mask]
+        print(f'Experiment 1: Using {es.num_classes} classes for training.')
+        print(f'Original filling set size: {len(trf_rounded)}')
+        print(f'Filtered filling set size (labels < {known_threshold}): {len(trf_to_register)}')
         # Registrate filling data.
-        for features in trf_rounded:
+        for features in trf_to_register:
             eam.register(features)
 
     elif es.experiment_number == 2:
@@ -1163,6 +1170,11 @@ if __name__ == "__main__":
 
         exp_settings.experiment_number = experiment
         exp_settings.num_classes = classes
+
+        # Set experiment-specific run path
+        exp_run_path = os.path.join(constants.run_path, f'exp_{experiment}_classes_{classes}')
+        exp_settings.experiment_run_path = exp_run_path
+        constants.create_directory(exp_run_path)
 
         if experiment == 1:
             run_evaluation(exp_settings)
