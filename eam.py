@@ -50,6 +50,7 @@ import gc
 from docopt import docopt
 import png
 import sys
+import os
 sys.setrecursionlimit(10000)
 
 
@@ -355,10 +356,10 @@ def get_ams_results(
     
     if es.experiment_number == 1:
         # Experiment 1: Use the specified number of classes for training
-        known_threshold = es.num_classes
+        known_threshold = constants.n_labels
         known_label_mask = (trl < known_threshold)
         trf_to_register = trf_rounded[known_label_mask]
-        print(f'Experiment 1: Using {es.num_classes} classes for training.')
+        print(f'Experiment 1: Using {constants.n_labels} classes for training.')
         print(f'Original filling set size: {len(trf_rounded)}')
         print(f'Filtered filling set size (labels < {known_threshold}): {len(trf_to_register)}')
         # Registrate filling data.
@@ -367,7 +368,7 @@ def get_ams_results(
 
     elif es.experiment_number == 2:
         # EXPERIMENT MODIFICATION: Only train with the first half of labels
-        known_threshold = es.num_classes // 2
+        known_threshold = constants.n_labels // 2
         # Create a mask to filter only the samples with labels in the first half
         known_label_mask = (trl < known_threshold)
         trf_filtered = trf_rounded[known_label_mask]
@@ -1168,6 +1169,7 @@ if __name__ == "__main__":
             print(f'Invalid classes number: {classes}, must be an even number')
             sys.exit(1)
 
+        constants.set_n_labels(classes)
         exp_settings.experiment_number = experiment
         exp_settings.num_classes = classes
 
@@ -1184,7 +1186,3 @@ if __name__ == "__main__":
         generate_memories(exp_settings)
     elif args['-d']:
         dream(exp_settings)
-
-
-
-

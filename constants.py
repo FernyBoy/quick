@@ -105,8 +105,15 @@ am_testing_percent = 0.10
 noise_percent = 50
 
 n_labels = 2
+training_n_labels = 4
 labels_per_memory = 1
 all_labels = list(range(n_labels))
+
+def set_n_labels(num_classes):
+    global n_labels, all_labels
+    n_labels = num_classes
+    all_labels = list(range(n_labels))
+
 label_formats = ['r:v', 'y--d', 'g-.4', 'y-.3', 'k-.8', 'y--^',
     'c-..', 'm:*', 'c-1', 'b-p', 'm-.D', 'c:D', 'r--s', 'g:d',
     'm:+', 'y-._', 'm:_', 'y--h', 'g--*', 'm:_', 'g-_', 'm:d']

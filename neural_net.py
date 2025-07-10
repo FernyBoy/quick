@@ -101,7 +101,7 @@ def get_classifier():
     drop = Dropout(0.4)(dense)
     dense = Dense(constants.domain, activation='relu')(drop)
     drop = Dropout(0.4)(dense)
-    classification = Dense(constants.n_labels,
+    classification = Dense(constants.training_n_labels,
         activation='softmax', name='classified')(drop)
     return input_mem, classification
 
@@ -171,7 +171,7 @@ class EarlyStopping(Callback):
 
 
 def train_network(prefix, es):
-    confusion_matrix = np.zeros((constants.n_labels, constants.n_labels))
+    confusion_matrix = np.zeros((constants.training_n_labels, constants.training_n_labels))
     histories = []
     for fold in range(constants.n_folds):
         training_data, training_labels = dataset.get_training(fold)
@@ -226,7 +226,7 @@ def train_network(prefix, es):
         histories.append(history)
         predicted_labels = np.argmax(full_classifier.predict(testing_data), axis=1)
         confusion_matrix += tf.math.confusion_matrix(np.argmax(testing_labels, axis=1), 
-            predicted_labels, num_classes=constants.n_labels)
+            predicted_labels, num_classes=constants.training_n_labels)
         history = autoencoder.evaluate(testing_data, testing_data, return_dict=True)
         histories.append(history)
         encoder.save(constants.encoder_filename(prefix, es, fold))

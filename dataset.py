@@ -66,7 +66,7 @@ def _get_segment(segment, fold, noised = False):
     labels = constants.get_data_in_range(_get_segment.labels, n, m)
     
     # Convert labels to one-hot encoding
-    labels = keras.utils.to_categorical(labels, num_classes=constants.n_labels)
+    labels = keras.utils.to_categorical(labels, num_classes=constants.training_n_labels)
     
     return data, labels
 
