@@ -1,0 +1,285 @@
+  python eam.py -n
+2025-07-11 02:16:22.013472: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2025-07-11 02:16:22.020220: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:485] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2025-07-11 02:16:22.027815: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:8454] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2025-07-11 02:16:22.030063: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1452] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2025-07-11 02:16:22.036877: I tensorflow/core/platform/cpu_feature_guard.cc:210] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: SSE4.1 SSE4.2 AVX AVX2 AVX512F AVX512_VNNI AVX512_BF16 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+Working directory: runs
+Experimental settings: {Parameters: [0.  0.  0.  0.1]}
+Memory size (columns): 256
+Preprocessed dataset does not exist.
+Loading QuickDraw .npy files...
+Loading airplane from data/quick/full_numpy_bitmap_airplane.npy...
+Loading alarm clock from data/quick/full_numpy_bitmap_alarm clock.npy...
+Loading apple from data/quick/full_numpy_bitmap_apple.npy...
+Loading calendar from data/quick/full_numpy_bitmap_calendar.npy...
+123399
+Loaded 493596 samples from 4 classes.
+Adding 50% noise to data.
+................................................................................................... 10000 ................................................................................................... 20000 ................................................................................................... 30000 ................................................................................................... 40000 ................................................................................................... 50000 ................................................................................................... 60000 ................................................................................................... 70000 ................................................................................................... 80000 ................................................................................................... 90000 ................................................................................................... 100000 ................................................................................................... 110000 ................................................................................................... 120000 ................................................................................................... 130000 ................................................................................................... 140000 ................................................................................................... 150000 ................................................................................................... 160000 ................................................................................................... 170000 ................................................................................................... 180000 ................................................................................................... 190000 ................................................................................................... 200000 ................................................................................................... 210000 ................................................................................................... 220000 ................................................................................................... 230000 ................................................................................................... 240000 ................................................................................................... 250000 ................................................................................................... 260000 ................................................................................................... 270000 ................................................................................................... 280000 ................................................................................................... 290000 ................................................................................................... 300000 ................................................................................................... 310000 ................................................................................................... 320000 ................................................................................................... 330000 ................................................................................................... 340000 ................................................................................................... 350000 ................................................................................................... 360000 ................................................................................................... 370000 ................................................................................................... 380000 ................................................................................................... 390000 ................................................................................................... 400000 ................................................................................................... 410000 ................................................................................................... 420000 ................................................................................................... 430000 ................................................................................................... 440000 ................................................................................................... 450000 ................................................................................................... 460000 ................................................................................................... 470000 ................................................................................................... 480000 ................................................................................................... 490000 ...................................Shuffling data and labels
+Saving preprocessed dataset
+Delimiting segment of data.
+Delimiting segment of data.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1752222207.447631   35486 cuda_executor.cc:1015] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+I0000 00:00:1752222207.462837   35486 cuda_executor.cc:1015] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+I0000 00:00:1752222207.465081   35486 cuda_executor.cc:1015] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+I0000 00:00:1752222207.468130   35486 cuda_executor.cc:1015] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+I0000 00:00:1752222207.470305   35486 cuda_executor.cc:1015] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+I0000 00:00:1752222207.472465   35486 cuda_executor.cc:1015] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+I0000 00:00:1752222207.553686   35486 cuda_executor.cc:1015] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+I0000 00:00:1752222207.554785   35486 cuda_executor.cc:1015] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+I0000 00:00:1752222207.555648   35486 cuda_executor.cc:1015] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2025-07-11 02:23:27.556516: I tensorflow/core/common_runtime/gpu/gpu_device.cc:2021] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 6123 MB memory:  -> device: 0, name: NVIDIA GeForce RTX 4070 Laptop GPU, pci bus id: 0000:01:00.0, compute capability: 8.9
+/home/Ferny/anaconda3/envs/mem/lib/python3.12/site-packages/keras/src/layers/convolutional/base_conv.py:107: UserWarning: Do not pass an `input_shape`/`input_dim` argument to a layer. When using Sequential models, prefer using an `Input(shape)` object as the first layer in the model instead.
+  super().__init__(activity_regularizer=activity_regularizer, **kwargs)
+Model: "encoder"
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓
+┃ Layer (type)                         ┃ Output Shape                ┃         Param # ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
+│ input_layer_1 (InputLayer)           │ (None, 28, 28, 1)           │               0 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ conv2d (Conv2D)                      │ (None, 28, 28, 16)          │             160 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ batch_normalization                  │ (None, 28, 28, 16)          │              64 │
+│ (BatchNormalization)                 │                             │                 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ conv2d_1 (Conv2D)                    │ (None, 28, 28, 16)          │           2,320 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ batch_normalization_1                │ (None, 28, 28, 16)          │              64 │
+│ (BatchNormalization)                 │                             │                 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ max_pooling2d (MaxPooling2D)         │ (None, 14, 14, 16)          │               0 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ spatial_dropout2d (SpatialDropout2D) │ (None, 14, 14, 16)          │               0 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ conv2d_2 (Conv2D)                    │ (None, 14, 14, 32)          │           4,640 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ batch_normalization_2                │ (None, 14, 14, 32)          │             128 │
+│ (BatchNormalization)                 │                             │                 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ conv2d_3 (Conv2D)                    │ (None, 14, 14, 32)          │           9,248 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ batch_normalization_3                │ (None, 14, 14, 32)          │             128 │
+│ (BatchNormalization)                 │                             │                 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ max_pooling2d_1 (MaxPooling2D)       │ (None, 7, 7, 32)            │               0 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ spatial_dropout2d_1                  │ (None, 7, 7, 32)            │               0 │
+│ (SpatialDropout2D)                   │                             │                 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ conv2d_4 (Conv2D)                    │ (None, 7, 7, 64)            │          18,496 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ batch_normalization_4                │ (None, 7, 7, 64)            │             256 │
+│ (BatchNormalization)                 │                             │                 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ conv2d_5 (Conv2D)                    │ (None, 7, 7, 64)            │          36,928 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ batch_normalization_5                │ (None, 7, 7, 64)            │             256 │
+│ (BatchNormalization)                 │                             │                 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ conv2d_6 (Conv2D)                    │ (None, 7, 7, 64)            │          36,928 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ batch_normalization_6                │ (None, 7, 7, 64)            │             256 │
+│ (BatchNormalization)                 │                             │                 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ max_pooling2d_2 (MaxPooling2D)       │ (None, 4, 4, 64)            │               0 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ spatial_dropout2d_2                  │ (None, 4, 4, 64)            │               0 │
+│ (SpatialDropout2D)                   │                             │                 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ conv2d_7 (Conv2D)                    │ (None, 4, 4, 128)           │          73,856 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ batch_normalization_7                │ (None, 4, 4, 128)           │             512 │
+│ (BatchNormalization)                 │                             │                 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ conv2d_8 (Conv2D)                    │ (None, 4, 4, 128)           │         147,584 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ batch_normalization_8                │ (None, 4, 4, 128)           │             512 │
+│ (BatchNormalization)                 │                             │                 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ conv2d_9 (Conv2D)                    │ (None, 4, 4, 128)           │         147,584 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ batch_normalization_9                │ (None, 4, 4, 128)           │             512 │
+│ (BatchNormalization)                 │                             │                 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ max_pooling2d_3 (MaxPooling2D)       │ (None, 2, 2, 128)           │               0 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ spatial_dropout2d_3                  │ (None, 2, 2, 128)           │               0 │
+│ (SpatialDropout2D)                   │                             │                 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ conv2d_10 (Conv2D)                   │ (None, 2, 2, 256)           │         295,168 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ batch_normalization_10               │ (None, 2, 2, 256)           │           1,024 │
+│ (BatchNormalization)                 │                             │                 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ conv2d_11 (Conv2D)                   │ (None, 2, 2, 256)           │         590,080 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ batch_normalization_11               │ (None, 2, 2, 256)           │           1,024 │
+│ (BatchNormalization)                 │                             │                 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ conv2d_12 (Conv2D)                   │ (None, 2, 2, 256)           │         590,080 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ batch_normalization_12               │ (None, 2, 2, 256)           │           1,024 │
+│ (BatchNormalization)                 │                             │                 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ max_pooling2d_4 (MaxPooling2D)       │ (None, 1, 1, 256)           │               0 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ spatial_dropout2d_4                  │ (None, 1, 1, 256)           │               0 │
+│ (SpatialDropout2D)                   │                             │                 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ flatten (Flatten)                    │ (None, 256)                 │               0 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ encoded (LayerNormalization)         │ (None, 256)                 │             512 │
+└──────────────────────────────────────┴─────────────────────────────┴─────────────────┘
+ Total params: 1,959,344 (7.47 MB)
+ Trainable params: 1,956,464 (7.46 MB)
+ Non-trainable params: 2,880 (11.25 KB)
+/home/Ferny/anaconda3/envs/mem/lib/python3.12/site-packages/keras/src/layers/core/dense.py:87: UserWarning: Do not pass an `input_shape`/`input_dim` argument to a layer. When using Sequential models, prefer using an `Input(shape)` object as the first layer in the model instead.
+  super().__init__(activity_regularizer=activity_regularizer, **kwargs)
+Model: "classifier"
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓
+┃ Layer (type)                         ┃ Output Shape                ┃         Param # ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
+│ input_layer_2 (InputLayer)           │ (None, 256)                 │               0 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ dense (Dense)                        │ (None, 256)                 │          65,792 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ dropout (Dropout)                    │ (None, 256)                 │               0 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ dense_1 (Dense)                      │ (None, 256)                 │          65,792 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ dropout_1 (Dropout)                  │ (None, 256)                 │               0 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ classified (Dense)                   │ (None, 4)                   │           1,028 │
+└──────────────────────────────────────┴─────────────────────────────┴─────────────────┘
+ Total params: 132,612 (518.02 KB)
+ Trainable params: 132,612 (518.02 KB)
+ Non-trainable params: 0 (0.00 B)
+Model: "decoder"
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓
+┃ Layer (type)                         ┃ Output Shape                ┃         Param # ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
+│ input_layer_3 (InputLayer)           │ (None, 256)                 │               0 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ dense_2 (Dense)                      │ (None, 6272)                │       1,611,904 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ reshape (Reshape)                    │ (None, 7, 7, 128)           │               0 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ conv2d_13 (Conv2D)                   │ (None, 7, 7, 256)           │         295,168 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ up_sampling2d (UpSampling2D)         │ (None, 14, 14, 256)         │               0 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ spatial_dropout2d_5                  │ (None, 14, 14, 256)         │               0 │
+│ (SpatialDropout2D)                   │                             │                 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ batch_normalization_13               │ (None, 14, 14, 256)         │           1,024 │
+│ (BatchNormalization)                 │                             │                 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ conv2d_14 (Conv2D)                   │ (None, 14, 14, 128)         │         295,040 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ up_sampling2d_1 (UpSampling2D)       │ (None, 28, 28, 128)         │               0 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ spatial_dropout2d_6                  │ (None, 28, 28, 128)         │               0 │
+│ (SpatialDropout2D)                   │                             │                 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ batch_normalization_14               │ (None, 28, 28, 128)         │             512 │
+│ (BatchNormalization)                 │                             │                 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ conv2d_15 (Conv2D)                   │ (None, 28, 28, 1)           │           1,153 │
+└──────────────────────────────────────┴─────────────────────────────┴─────────────────┘
+ Total params: 2,204,801 (8.41 MB)
+ Trainable params: 2,204,033 (8.41 MB)
+ Non-trainable params: 768 (3.00 KB)
+Model: "functional"
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Layer (type)                  ┃ Output Shape              ┃         Param # ┃ Connected to               ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ input_layer (InputLayer)      │ (None, 28, 28, 1)         │               0 │ -                          │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ encoder (Functional)          │ (None, 256)               │       1,959,344 │ input_layer[0][0]          │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ classifier (Functional)       │ (None, 4)                 │         132,612 │ encoder[0][0]              │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ decoder (Functional)          │ (None, 28, 28, 1)         │       2,204,801 │ encoder[0][0]              │
+└───────────────────────────────┴───────────────────────────┴─────────────────┴────────────────────────────┘
+ Total params: 4,296,757 (16.39 MB)
+ Trainable params: 4,293,109 (16.38 MB)
+ Non-trainable params: 3,648 (14.25 KB)
+Epoch 1/300
+I0000 00:00:1752222212.492073   36518 service.cc:146] XLA service 0x7f76f80026d0 initialized for platform CUDA (this does not guarantee that XLA will be used). Devices:
+I0000 00:00:1752222212.492095   36518 service.cc:154]   StreamExecutor device (0): NVIDIA GeForce RTX 4070 Laptop GPU, Compute Capability 8.9
+2025-07-11 02:23:32.586725: I tensorflow/compiler/mlir/tensorflow/utils/dump_mlir_util.cc:268] disabling MLIR crash reproducer, set env var `MLIR_CRASH_REPRODUCER_DIRECTORY` to enable.
+2025-07-11 02:23:33.058775: I external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:531] Loaded cuDNN version 90101
+I0000 00:00:1752222220.105491   36518 device_compiler.h:188] Compiled cluster using XLA!  This line is logged at most once for the lifetime of the process.
+Epochs waiting: 0
+8638/8638 - 61s - 7ms/step - classifier_accuracy: 0.9088 - classifier_loss: 0.2775 - decoder_loss: 0.0885 - decoder_root_mean_squared_error: 0.2974 - loss: 0.3660 - val_classifier_accuracy: 0.9549 - val_classifier_loss: 0.1455 - val_decoder_loss: 0.0856 - val_decoder_root_mean_squared_error: 0.2926 - val_loss: 0.2310
+Epoch 2/300
+Epochs waiting: 0
+8638/8638 - 39s - 5ms/step - classifier_accuracy: 0.9504 - classifier_loss: 0.1617 - decoder_loss: 0.0855 - decoder_root_mean_squared_error: 0.2924 - loss: 0.2472 - val_classifier_accuracy: 0.9661 - val_classifier_loss: 0.1315 - val_decoder_loss: 0.0828 - val_decoder_root_mean_squared_error: 0.2877 - val_loss: 0.2143
+Epoch 3/300
+Epochs waiting: 0
+8638/8638 - 39s - 5ms/step - classifier_accuracy: 0.9581 - classifier_loss: 0.1372 - decoder_loss: 0.0832 - decoder_root_mean_squared_error: 0.2885 - loss: 0.2205 - val_classifier_accuracy: 0.9679 - val_classifier_loss: 0.1149 - val_decoder_loss: 0.0804 - val_decoder_root_mean_squared_error: 0.2836 - val_loss: 0.1953
+Epoch 4/300
+Epochs waiting: 0
+8638/8638 - 39s - 5ms/step - classifier_accuracy: 0.9612 - classifier_loss: 0.1245 - decoder_loss: 0.0820 - decoder_root_mean_squared_error: 0.2864 - loss: 0.2065 - val_classifier_accuracy: 0.9708 - val_classifier_loss: 0.1066 - val_decoder_loss: 0.0796 - val_decoder_root_mean_squared_error: 0.2822 - val_loss: 0.1862
+Epoch 5/300
+Epochs waiting: 0
+8638/8638 - 40s - 5ms/step - classifier_accuracy: 0.9638 - classifier_loss: 0.1160 - decoder_loss: 0.0811 - decoder_root_mean_squared_error: 0.2848 - loss: 0.1970 - val_classifier_accuracy: 0.9694 - val_classifier_loss: 0.1173 - val_decoder_loss: 0.0782 - val_decoder_root_mean_squared_error: 0.2797 - val_loss: 0.1955
+Epoch 6/300
+Epochs waiting: 0
+8638/8638 - 39s - 5ms/step - classifier_accuracy: 0.9652 - classifier_loss: 0.1111 - decoder_loss: 0.0800 - decoder_root_mean_squared_error: 0.2829 - loss: 0.1911 - val_classifier_accuracy: 0.9724 - val_classifier_loss: 0.1025 - val_decoder_loss: 0.0769 - val_decoder_root_mean_squared_error: 0.2772 - val_loss: 0.1794
+Epoch 7/300
+Epochs waiting: 1
+8638/8638 - 40s - 5ms/step - classifier_accuracy: 0.9668 - classifier_loss: 0.1058 - decoder_loss: 0.0789 - decoder_root_mean_squared_error: 0.2809 - loss: 0.1847 - val_classifier_accuracy: 0.9707 - val_classifier_loss: 0.1192 - val_decoder_loss: 0.0757 - val_decoder_root_mean_squared_error: 0.2751 - val_loss: 0.1947
+Epoch 8/300
+Epochs waiting: 0
+8638/8638 - 40s - 5ms/step - classifier_accuracy: 0.9677 - classifier_loss: 0.1017 - decoder_loss: 0.0778 - decoder_root_mean_squared_error: 0.2790 - loss: 0.1795 - val_classifier_accuracy: 0.9735 - val_classifier_loss: 0.0956 - val_decoder_loss: 0.0745 - val_decoder_root_mean_squared_error: 0.2729 - val_loss: 0.1701
+Epoch 9/300
+Epochs waiting: 0
+8638/8638 - 40s - 5ms/step - classifier_accuracy: 0.9685 - classifier_loss: 0.0994 - decoder_loss: 0.0770 - decoder_root_mean_squared_error: 0.2775 - loss: 0.1765 - val_classifier_accuracy: 0.9727 - val_classifier_loss: 0.0973 - val_decoder_loss: 0.0751 - val_decoder_root_mean_squared_error: 0.2740 - val_loss: 0.1724
+Epoch 10/300
+Epochs waiting: 1
+8638/8638 - 40s - 5ms/step - classifier_accuracy: 0.9693 - classifier_loss: 0.0980 - decoder_loss: 0.0763 - decoder_root_mean_squared_error: 0.2763 - loss: 0.1744 - val_classifier_accuracy: 0.9733 - val_classifier_loss: 0.1037 - val_decoder_loss: 0.0732 - val_decoder_root_mean_squared_error: 0.2706 - val_loss: 0.1768
+Epoch 11/300
+Epochs waiting: 2
+8638/8638 - 39s - 5ms/step - classifier_accuracy: 0.9697 - classifier_loss: 0.0957 - decoder_loss: 0.0759 - decoder_root_mean_squared_error: 0.2755 - loss: 0.1716 - val_classifier_accuracy: 0.9744 - val_classifier_loss: 0.1182 - val_decoder_loss: 0.0730 - val_decoder_root_mean_squared_error: 0.2702 - val_loss: 0.1912
+Epoch 12/300
+Epochs waiting: 0
+8638/8638 - 39s - 5ms/step - classifier_accuracy: 0.9704 - classifier_loss: 0.0949 - decoder_loss: 0.0756 - decoder_root_mean_squared_error: 0.2749 - loss: 0.1704 - val_classifier_accuracy: 0.9744 - val_classifier_loss: 0.0890 - val_decoder_loss: 0.0724 - val_decoder_root_mean_squared_error: 0.2692 - val_loss: 0.1614
+Epoch 13/300
+Epochs waiting: 1
+8638/8638 - 39s - 5ms/step - classifier_accuracy: 0.9708 - classifier_loss: 0.0936 - decoder_loss: 0.0752 - decoder_root_mean_squared_error: 0.2742 - loss: 0.1688 - val_classifier_accuracy: 0.9744 - val_classifier_loss: 0.0981 - val_decoder_loss: 0.0721 - val_decoder_root_mean_squared_error: 0.2686 - val_loss: 0.1703
+Epoch 14/300
+Epochs waiting: 2
+8638/8638 - 39s - 5ms/step - classifier_accuracy: 0.9714 - classifier_loss: 0.0901 - decoder_loss: 0.0747 - decoder_root_mean_squared_error: 0.2733 - loss: 0.1648 - val_classifier_accuracy: 0.9758 - val_classifier_loss: 0.1013 - val_decoder_loss: 0.0716 - val_decoder_root_mean_squared_error: 0.2675 - val_loss: 0.1728
+Epoch 15/300
+Epochs waiting: 0
+8638/8638 - 39s - 5ms/step - classifier_accuracy: 0.9715 - classifier_loss: 0.0893 - decoder_loss: 0.0744 - decoder_root_mean_squared_error: 0.2727 - loss: 0.1636 - val_classifier_accuracy: 0.9760 - val_classifier_loss: 0.0916 - val_decoder_loss: 0.0708 - val_decoder_root_mean_squared_error: 0.2662 - val_loss: 0.1624
+Epoch 16/300
+Epochs waiting: 1
+8638/8638 - 40s - 5ms/step - classifier_accuracy: 0.9719 - classifier_loss: 0.0886 - decoder_loss: 0.0739 - decoder_root_mean_squared_error: 0.2719 - loss: 0.1625 - val_classifier_accuracy: 0.9723 - val_classifier_loss: 0.1242 - val_decoder_loss: 0.0707 - val_decoder_root_mean_squared_error: 0.2659 - val_loss: 0.1949
+Epoch 17/300
+Epochs waiting: 2
+8638/8638 - 39s - 5ms/step - classifier_accuracy: 0.9720 - classifier_loss: 0.0884 - decoder_loss: 0.0737 - decoder_root_mean_squared_error: 0.2715 - loss: 0.1621 - val_classifier_accuracy: 0.9761 - val_classifier_loss: 0.0944 - val_decoder_loss: 0.0701 - val_decoder_root_mean_squared_error: 0.2648 - val_loss: 0.1645
+Epoch 18/300
+Epochs waiting: 3
+8638/8638 - 40s - 5ms/step - classifier_accuracy: 0.9721 - classifier_loss: 0.0869 - decoder_loss: 0.0733 - decoder_root_mean_squared_error: 0.2708 - loss: 0.1602 - val_classifier_accuracy: 0.9747 - val_classifier_loss: 0.1117 - val_decoder_loss: 0.0697 - val_decoder_root_mean_squared_error: 0.2640 - val_loss: 0.1814
+Epoch 19/300
+Epochs waiting: 4
+8638/8638 - 40s - 5ms/step - classifier_accuracy: 0.9729 - classifier_loss: 0.0851 - decoder_loss: 0.0732 - decoder_root_mean_squared_error: 0.2705 - loss: 0.1583 - val_classifier_accuracy: 0.9768 - val_classifier_loss: 0.1219 - val_decoder_loss: 0.0701 - val_decoder_root_mean_squared_error: 0.2647 - val_loss: 0.1920
+Epoch 20/300
+Epochs waiting: 5
+8638/8638 - 40s - 5ms/step - classifier_accuracy: 0.9733 - classifier_loss: 0.0846 - decoder_loss: 0.0730 - decoder_root_mean_squared_error: 0.2702 - loss: 0.1575 - val_classifier_accuracy: 0.9762 - val_classifier_loss: 0.1094 - val_decoder_loss: 0.0704 - val_decoder_root_mean_squared_error: 0.2653 - val_loss: 0.1797
+Epoch 21/300
+Epochs waiting: 6
+8638/8638 - 39s - 5ms/step - classifier_accuracy: 0.9734 - classifier_loss: 0.0845 - decoder_loss: 0.0728 - decoder_root_mean_squared_error: 0.2698 - loss: 0.1573 - val_classifier_accuracy: 0.9759 - val_classifier_loss: 0.1037 - val_decoder_loss: 0.0694 - val_decoder_root_mean_squared_error: 0.2634 - val_loss: 0.1731
+Epoch 22/300
+Epochs waiting: 7
+Restoring model weights from the end of the best epoch.
+8638/8638 - 39s - 5ms/step - classifier_accuracy: 0.9735 - classifier_loss: 0.0840 - decoder_loss: 0.0725 - decoder_root_mean_squared_error: 0.2693 - loss: 0.1565 - val_classifier_accuracy: 0.9767 - val_classifier_loss: 0.0897 - val_decoder_loss: 0.0686 - val_decoder_root_mean_squared_error: 0.2620 - val_loss: 0.1583
+Epoch 00022: early stopping
+1543/1543 ━━━━━━━━━━━━━━━━━━━━ 2s 902us/step - accuracy: 0.9759 - loss: 0.0825
+1543/1543 ━━━━━━━━━━━━━━━━━━━━ 2s 988us/step
+1543/1543 ━━━━━━━━━━━━━━━━━━━━ 3s 1ms/step - loss: 0.0354 - root_mean_squared_error: 0.2630

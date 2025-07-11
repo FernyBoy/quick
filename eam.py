@@ -366,12 +366,17 @@ def get_ams_results(
         known_threshold = constants.n_labels
         known_label_mask = (trl < known_threshold)
         trf_to_register = trf_rounded[known_label_mask]
-        print(f'Experiment 1: Using {constants.n_labels} classes for training.')
+        trl_to_register = trl[known_label_mask]
+        print(f'Experiment 1: Using {constants.n_labels} classes for experiment.')
         print(f'Original filling set size: {len(trf_rounded)}')
         print(f'Filtered filling set size (labels < {known_threshold}): {len(trf_to_register)}')
         # Registrate filling data.
-        for features in trf_to_register:
+        classs = None
+        for features, label in zip(trf_to_register, trl_to_register):
             eam.register(features)
+            if label != classs:
+                classs = label
+                print(f'Clase: {classs}')
 
     elif es.experiment_number == 2:
         # EXPERIMENT MODIFICATION: Only train with the first half of labels
@@ -379,6 +384,8 @@ def get_ams_results(
         # Create a mask to filter only the samples with labels in the first half
         known_label_mask = (trl < known_threshold)
         trf_filtered = trf_rounded[known_label_mask]
+        print(f'trf size: {trf_filtered.shape}')
+        print(f'trf rounded: {trf_rounded.shape}')
 
         print(f'Total labels: {constants.n_labels}. Known threshold: {known_threshold}')
         print(f'Original filling set size: {len(trf_rounded)}')

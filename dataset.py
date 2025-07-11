@@ -193,7 +193,7 @@ def _load_quickdraw(path):
         temp_data_list.append(images)
         temp_labels_list.append(np.full(len(images), label_index, dtype=int))
 
-    print(minimum_images)
+    print(f'Minimum images: {minimum_images}')
     for data, labels in zip(temp_data_list, temp_labels_list):
         data_list.append(data[:minimum_images])
         labels_list.append(labels[:minimum_images])
