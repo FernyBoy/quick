@@ -395,9 +395,30 @@ def get_ams_results(
         for features in trf_filtered:
             eam.register(features)
 
-    # Recognize test data (using all labels).
+    # Recognize test data.
+    # IMPORTANT: Filter the test data to include only the classes relevant to the experiment.
+    # This ensures a fair evaluation, as the memory is tested only on what it's supposed to know.
+    if es.experiment_number == 1:
+        # For experiment 1, we evaluate on all specified classes.
+        test_known_threshold = constants.n_labels
+    elif es.experiment_number == 2:
+        # For experiment 2, we only trained with the first half of the classes,
+        # so we must also test only with that same half.
+        test_known_threshold = constants.n_labels // 2
+
+    # Create a boolean mask to select the appropriate test samples.
+    test_label_mask = (tel < test_known_threshold)
+    
+    # Apply the mask to filter both features and labels.
+    tef_rounded_filtered = tef_rounded[test_label_mask]
+    tel_filtered = tel[test_label_mask]
+
+    print(f'Original testing set size: {len(tef_rounded)}')
+    print(f'Filtered testing set size (labels < {test_known_threshold}): {len(tef_rounded_filtered)}')
+
+    # Call the function with the filtered data.
     confrix, behaviour = recognize_by_memory(
-        eam, tef_rounded, tel, msize, min_value, max_value, classifier)
+        eam, tef_rounded_filtered, tel_filtered, msize, min_value, max_value, classifier)
     
     # If there are no responses, precision is undefined. Let's set it to 0.
     responses = len(tel) - behaviour[constants.no_response_idx]
