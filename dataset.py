@@ -169,7 +169,7 @@ def _load_quickdraw(path):
     """
     print("Loading QuickDraw .npy files...")
     files = sorted([f for f in os.listdir(path) if f.endswith('.npy')])
-    files = files[:constants.n_labels]  # <-- FIX: Limit files to n_labels
+    files = files[:constants.training_n_labels]  # <-- FIX: Limit files to n_labels
     data_list = []
     labels_list = []
     label_dict = {}

@@ -292,40 +292,28 @@ def create_directory(path):
         print(f'Directory {path} already exists.')
     
 
-def filename(name_prefix, es = None, fold = None, extension = ''):
+def filename(name_prefix, es = None, fold = None, extension = '', sub_dir = None):
     """ Returns a file name in run_path directory with a given extension and an index
     """
-    # Determine the base run path
-    base_run_path = run_path
-    if es is not None and es.experiment_run_path is not None:
-        base_run_path = es.experiment_run_path
-
     # Create target directory & all intermediate directories if don't exists
     try:
-        os.makedirs(base_run_path)
-        print("Directory " , base_run_path ,  " created ")
+        os.makedirs(run_path)
+        print("Directory " , run_path ,  " created ")
     except FileExistsError:
         pass
-    return base_run_path + '/' + get_full_name(name_prefix,es) \
-        + fold_suffix(fold) + extension
+    if sub_dir:
+        return run_path + '/' + sub_dir + '/' + get_full_name(name_prefix,es) \
+            + fold_suffix(fold) + extension
+    else:
+        return run_path + '/' + get_full_name(name_prefix,es) \
+            + fold_suffix(fold) + extension
 
-# def filename(name_prefix, es=None, fold=None, extension='.keras'):
-#     """ Returns a file name in run_path directory with a given extension and an index """
-#     # Construcción del nombre base
-#     name = name_prefix
 
-#     if es is not None:
-#         name += f'_es_{es:03d}'
-#     if fold is not None:
-#         name += f'_fld_{fold:03d}'
+def csv_filename(name_prefix, es = None, fold = None, sub_dir = None):
+    return filename(name_prefix, es, fold, '.csv', sub_dir)
 
-#     return f'runs/{name}{extension}'
-
-def csv_filename(name_prefix, es = None, fold = None):
-    return filename(name_prefix, es, fold, '.csv')
-
-def data_filename(name_prefix, es = None, fold = None):
-    return filename(name_prefix, es, fold, '.npy')
+def data_filename(name_prefix, es = None, fold = None, sub_dir = None):
+    return filename(name_prefix, es, fold, '.npy', sub_dir)
 
 def input_data_filename(name_prefix, es=None, fold=None):
     """Returns a file name for an INPUT npy file, always in the main run_path."""
@@ -338,8 +326,8 @@ def json_filename(name_prefix, es):
 def pickle_filename(name_prefix, es = None, fold = None):
     return filename(name_prefix, es, fold, '.pkl')
 
-def picture_filename(name_prefix, es, fold = None):
-    return filename(name_prefix, es, fold, extension='.svg')
+def picture_filename(name_prefix, es, fold = None, sub_dir = None):
+    return filename(name_prefix, es, fold, extension='.svg', sub_dir=sub_dir)
 
 def image_filename(prefix, idx, label, suffix = '', es = None, fold = None):
     name_prefix = image_path + '/' + prefix + '/' + \

@@ -116,7 +116,7 @@ def plot_pre_graph(pre_mean, rec_mean, ent_mean, pre_std, rec_std,
     cbar.set_label(_('Entropy'))
 
     s = tag + 'graph_prse_MEAN' + _('-english')
-    graph_filename = constants.picture_filename(s, es)
+    graph_filename = constants.picture_filename(s, es, None, es.experiment_run_path)
     plt.savefig(graph_filename, dpi=600)
 
 
@@ -188,7 +188,7 @@ def plot_behs_graph(no_response, no_correct, correct, es):
     plt.grid(axis='y')
 
     graph_filename = constants.picture_filename(
-        'graph_behaviours_MEAN' + _('-english'), es)
+        'graph_behaviours_MEAN' + _('-english'), es, None, es.experiment_run_path)
     plt.savefig(graph_filename, dpi=600)
 
 
@@ -513,17 +513,17 @@ def test_memory_sizes(domain, es):
         [stdv_no_response, stdv_no_correct_response, stdv_correct_response]
 
     np.savetxt(constants.csv_filename(
-        'memory_precision', es), precision, delimiter=',')
+        'memory_precision', es, None, es.experiment_run_path), precision, delimiter=',')
     np.savetxt(constants.csv_filename(
-        'memory_recall', es), recall, delimiter=',')
+        'memory_recall', es, None, es.experiment_run_path), recall, delimiter=',')
     np.savetxt(constants.csv_filename(
-        'memory_entropy', es), all_entropies, delimiter=',')
-    np.savetxt(constants.csv_filename('mean_behaviours', es),
+        'memory_entropy', es, None, es.experiment_run_path), all_entropies, delimiter=',')
+    np.savetxt(constants.csv_filename('mean_behaviours', es, None, es.experiment_run_path),
                mean_behaviours, delimiter=',')
-    np.savetxt(constants.csv_filename('stdv_behaviours', es),
+    np.savetxt(constants.csv_filename('stdv_behaviours', es, None, es.experiment_run_path),
                stdv_behaviours, delimiter=',')
-    np.save(constants.data_filename('memory_confrixes', es), average_confrixes)
-    np.save(constants.data_filename('behaviours', es), behaviours)
+    np.save(constants.data_filename('memory_confrixes', es, None, es.experiment_run_path), average_confrixes)
+    np.save(constants.data_filename('behaviours', es, None, es.experiment_run_path), behaviours)
     plot_pre_graph(average_precision, average_recall, average_entropy,
                    stdev_precision, stdev_recall, es)
     plot_behs_graph(mean_no_response, mean_no_correct_response,
@@ -655,27 +655,27 @@ def test_memory_fills(domain, mem_sizes, es):
 
         np.savetxt(
             constants.csv_filename(
-                'main_average_precision' + constants.numeric_suffix('sze', mem_size), es),
+                'main_average_precision' + constants.numeric_suffix('sze', mem_size), es, None, es.experiment_run_path),
             main_avrge_precisions, delimiter=',')
         np.savetxt(
             constants.csv_filename(
-                'main_average_recall' + constants.numeric_suffix('sze', mem_size), es),
+                'main_average_recall' + constants.numeric_suffix('sze', mem_size), es, None, es.experiment_run_path),
             main_avrge_recalls, delimiter=',')
         np.savetxt(
             constants.csv_filename(
-                'main_average_entropy' + constants.numeric_suffix('sze', mem_size), es),
+                'main_average_entropy' + constants.numeric_suffix('sze', mem_size), es, None, es.experiment_run_path),
             main_avrge_entropies, delimiter=',')
         np.savetxt(
             constants.csv_filename(
-                'main_stdev_precision' + constants.numeric_suffix('sze', mem_size), es),
+                'main_stdev_precision' + constants.numeric_suffix('sze', mem_size), es, None, es.experiment_run_path),
             main_stdev_precisions, delimiter=',')
         np.savetxt(
             constants.csv_filename(
-                'main_stdev_recall' + constants.numeric_suffix('sze', mem_size), es),
+                'main_stdev_recall' + constants.numeric_suffix('sze', mem_size), es, None, es.experiment_run_path),
             main_stdev_recalls, delimiter=',')
         np.savetxt(
             constants.csv_filename(
-                'main_stdev_entropy' + constants.numeric_suffix('sze', mem_size), es),
+                'main_stdev_entropy' + constants.numeric_suffix('sze', mem_size), es, None, es.experiment_run_path),
             main_stdev_entropies, delimiter=',')
 
         plot_pre_graph(main_avrge_precisions*100, main_avrge_recalls*100, main_avrge_entropies,
@@ -716,7 +716,7 @@ def save_conf_matrix(matrix, prefix, es):
 
 def save_learned_params(mem_sizes, fill_percents, es):
     name = constants.learn_params_name(es)
-    filename = constants.data_filename(name, es)
+    filename = constants.data_filename(name, es, None, es.experiment_run_path)
     np.save(filename, np.array([mem_sizes, fill_percents], dtype=int))
 
 
@@ -1181,9 +1181,12 @@ if __name__ == "__main__":
         exp_settings.num_classes = classes
 
         # Set experiment-specific run path
-        exp_run_path = os.path.join(constants.run_path, f'exp_{experiment}_classes_{classes}')
+        exp_run_path = f'exp_{experiment}_classes_{classes}'
+        exp_run_full_path = os.path.join(constants.run_path, exp_run_path)
         exp_settings.experiment_run_path = exp_run_path
-        constants.create_directory(exp_run_path)
+        constants.create_directory(exp_run_full_path)
+        
+        print(exp_settings.experiment_run_path)
 
         run_evaluation(exp_settings)
     elif args['-r']:
