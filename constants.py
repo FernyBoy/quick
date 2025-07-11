@@ -327,6 +327,11 @@ def csv_filename(name_prefix, es = None, fold = None):
 def data_filename(name_prefix, es = None, fold = None):
     return filename(name_prefix, es, fold, '.npy')
 
+def input_data_filename(name_prefix, es=None, fold=None):
+    """Returns a file name for an INPUT npy file, always in the main run_path."""
+    return os.path.join(run_path, get_full_name(name_prefix, es) + fold_suffix(fold) + '.npy')
+
+
 def json_filename(name_prefix, es):
     return filename(name_prefix, es, extension='.json')
 
@@ -356,16 +361,17 @@ def seed_labels_filename():
     return data_filename(learning_data_seed + labels_suffix)
 
 def model_filename(name_prefix, es, fold):
-    return filename(name_prefix, es, fold)
+    # This function will always point to the main runs directory
+    return os.path.join(run_path, get_full_name(name_prefix, es) + fold_suffix(fold))
 
 def encoder_filename(name_prefix, es, fold):
-    return filename(name_prefix + encoder_suffix, es, fold) + ".keras"
+    return model_filename(name_prefix + encoder_suffix, es, fold) + ".keras"
 
 def classifier_filename(name_prefix, es, fold):
-    return filename(name_prefix + classifier_suffix, es, fold) + ".keras"
+    return model_filename(name_prefix + classifier_suffix, es, fold) + ".keras"
 
 def decoder_filename(name_prefix, es, fold):
-    return filename(name_prefix + decoder_suffix, es, fold) + ".keras"
+    return model_filename(name_prefix + decoder_suffix, es, fold) + ".keras"
 
 def memory_confrix_filename(fill, es, fold):
     prefix = mem_conf_prefix + int_suffix(fill, 'fll')

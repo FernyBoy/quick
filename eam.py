@@ -297,17 +297,24 @@ def recognize_by_memory(eam, tef_rounded, tel, msize, minimum, maximum, classifi
     data = np.array(data)
     predictions = np.argmax(classifier.predict(data), axis=1)
     for correct, prediction in zip(labels, predictions):
-        # For calculation of per memory precision and recall
-        confrix[correct, prediction] += 1
+        # Only count if both the true label and the prediction are within
+        # the scope of the experiment.
+        if correct < constants.n_labels and prediction < constants.n_labels:
+            confrix[correct, prediction] += 1
+
     behaviour[constants.no_response_idx] = unknown
     behaviour[constants.correct_response_idx] = \
         np.sum([confrix[i, i] for i in range(constants.n_labels)])
 
+    # "No correct" are the items that were recalled by the memory, but not correctly classified.
+    recalled_count = len(labels)
     behaviour[constants.no_correct_response_idx] = \
-        len(tel) - unknown - behaviour[constants.correct_response_idx]
+        recalled_count - behaviour[constants.correct_response_idx]
+
     print(f'Confusion matrix:\n{confrix}')
     print(f'Behaviour: {behaviour}')
     return confrix, behaviour
+
 
 
 def split_by_label(fl_pairs):
@@ -419,18 +426,18 @@ def test_memory_sizes(domain, es):
         print(f'Fold: {fold}')
         suffix = constants.filling_suffix
         filling_features_filename = constants.features_name(es) + suffix
-        filling_features_filename = constants.data_filename(
+        filling_features_filename = constants.input_data_filename(
             filling_features_filename, es, fold)
         filling_labels_filename = constants.labels_name(es) + suffix
-        filling_labels_filename = constants.data_filename(
+        filling_labels_filename = constants.input_data_filename(
             filling_labels_filename, es, fold)
 
         suffix = constants.testing_suffix
         testing_features_filename = constants.features_name(es) + suffix
-        testing_features_filename = constants.data_filename(
+        testing_features_filename = constants.input_data_filename(
             testing_features_filename, es, fold)
         testing_labels_filename = constants.labels_name(es) + suffix
-        testing_labels_filename = constants.data_filename(
+        testing_labels_filename = constants.input_data_filename(
             testing_labels_filename, es, fold)
 
         filling_features = np.load(filling_features_filename)
@@ -554,18 +561,18 @@ def test_filling_per_fold(mem_size, domain, es, fold):
 
     suffix = constants.filling_suffix
     filling_features_filename = constants.features_name(es) + suffix
-    filling_features_filename = constants.data_filename(
+    filling_features_filename = constants.input_data_filename(
         filling_features_filename, es, fold)
     filling_labels_filename = constants.labels_name(es) + suffix
-    filling_labels_filename = constants.data_filename(
+    filling_labels_filename = constants.input_data_filename(
         filling_labels_filename, es, fold)
 
     suffix = constants.testing_suffix
     testing_features_filename = constants.features_name(es) + suffix
-    testing_features_filename = constants.data_filename(
+    testing_features_filename = constants.input_data_filename(
         testing_features_filename, es, fold)
     testing_labels_filename = constants.labels_name(es) + suffix
-    testing_labels_filename = constants.data_filename(
+    testing_labels_filename = constants.input_data_filename(
         testing_labels_filename, es, fold)
 
     filling_features = np.load(filling_features_filename)
@@ -746,17 +753,17 @@ def remember(msize, mfill, es):
             print(f'Running remembering for fold: {fold}')
             suffix = constants.filling_suffix
             filling_features_filename = constants.features_name(es) + suffix
-            filling_features_filename = constants.data_filename(
+            filling_features_filename = constants.input_data_filename(
                 filling_features_filename, es, fold)
 
             suffix = constants.testing_suffix
             testing_features_filename = constants.features_name(es) + suffix
-            testing_features_filename = constants.data_filename(
+            testing_features_filename = constants.input_data_filename(
                 testing_features_filename, es, fold)
 
             suffix = constants.noised_suffix
             noised_features_filename = constants.features_name(es) + suffix
-            noised_features_filename = constants.data_filename(
+            noised_features_filename = constants.input_data_filename(
                 noised_features_filename, es, fold)
 
             filling_features = np.load(filling_features_filename)
@@ -1178,10 +1185,7 @@ if __name__ == "__main__":
         exp_settings.experiment_run_path = exp_run_path
         constants.create_directory(exp_run_path)
 
-        if experiment == 1:
-            run_evaluation(exp_settings)
-        elif experiment == 2:
-            print('Trying exp 2')
+        run_evaluation(exp_settings)
     elif args['-r']:
         generate_memories(exp_settings)
     elif args['-d']:
