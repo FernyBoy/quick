@@ -376,7 +376,6 @@ def get_ams_results(
             eam.register(features)
             if label != classs:
                 classs = label
-                print(f'Clase: {classs}')
 
     elif es.experiment_number == 2:
         # EXPERIMENT MODIFICATION: Only train with the first half of labels
