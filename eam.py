@@ -397,13 +397,7 @@ def get_ams_results(
     # Recognize test data.
     # IMPORTANT: Filter the test data to include only the classes relevant to the experiment.
     # This ensures a fair evaluation, as the memory is tested only on what it's supposed to know.
-    if es.experiment_number == 1:
-        # For experiment 1, we evaluate on all specified classes.
-        test_known_threshold = constants.n_labels
-    elif es.experiment_number == 2:
-        # For experiment 2, we only trained with the first half of the classes,
-        # so we must also test only with that same half.
-        test_known_threshold = constants.n_labels // 2
+    test_known_threshold = constants.n_labels
 
     # Create a boolean mask to select the appropriate test samples.
     test_label_mask = (tel < test_known_threshold)
