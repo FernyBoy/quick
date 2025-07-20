@@ -344,7 +344,6 @@ def optimum_indexes(precisions, recalls):
     f1s.sort(reverse=True, key=lambda tuple: tuple[0])
     return [t[1] for t in f1s[:constants.n_best_memory_sizes]]
 
-
 def get_ams_results(
         midx, msize, domain, trf, tef, trl, tel, classifier, es, fold):
     # Round the values
@@ -360,66 +359,23 @@ def get_ams_results(
     eam = AssociativeMemory(
         domain, msize, p[constants.xi_idx], p[constants.sigma_idx],
         p[constants.iota_idx], p[constants.kappa_idx])
-    
-    if es.experiment_number == 1:
-        # Experiment 1: Use the specified number of classes for training
-        known_threshold = constants.n_labels
-        known_label_mask = (trl < known_threshold)
-        trf_to_register = trf_rounded[known_label_mask]
-        trl_to_register = trl[known_label_mask]
-        print(f'Experiment 1: Using {constants.n_labels} classes for experiment.')
-        print(f'Original filling set size: {len(trf_rounded)}')
-        print(f'Filtered filling set size (labels < {known_threshold}): {len(trf_to_register)}')
-        # Registrate filling data.
-        classs = None
-        for features, label in zip(trf_to_register, trl_to_register):
-            eam.register(features)
-            if label != classs:
-                classs = label
-                print(f'Clase: {classs}')
 
-    elif es.experiment_number == 2:
-        # EXPERIMENT MODIFICATION: Only train with the first half of labels
+
+    known_threshold = constants.n_labels
+    
+    if es.experiment_number == 2:
         known_threshold = constants.n_labels // 2
-        # Create a mask to filter only the samples with labels in the first half
-        known_label_mask = (trl < known_threshold)
-        trf_filtered = trf_rounded[known_label_mask]
-        print(f'trf size: {trf_filtered.shape}')
-        print(f'trf rounded: {trf_rounded.shape}')
 
-        print(f'Total labels: {constants.n_labels}. Known threshold: {known_threshold}')
-        print(f'Original filling set size: {len(trf_rounded)}')
-        print(f'Filtered filling set size (labels < {known_threshold}): {len(trf_filtered)}')
+    known_label_mask = (trl < known_threshold)
+    trf_to_register = trf_rounded[known_label_mask]
 
-        # Registrate filling data.
-        for features in trf_filtered:
-            eam.register(features)
+    for features in trf_to_register:
+        eam.register(features)
 
-    # Recognize test data.
-    # IMPORTANT: Filter the test data to include only the classes relevant to the experiment.
-    # This ensures a fair evaluation, as the memory is tested only on what it's supposed to know.
-    if es.experiment_number == 1:
-        # For experiment 1, we evaluate on all specified classes.
-        test_known_threshold = constants.n_labels
-    elif es.experiment_number == 2:
-        # For experiment 2, we only trained with the first half of the classes,
-        # so we must also test only with that same half.
-        test_known_threshold = constants.n_labels // 2
-
-    # Create a boolean mask to select the appropriate test samples.
-    test_label_mask = (tel < test_known_threshold)
-    
-    # Apply the mask to filter both features and labels.
-    tef_rounded_filtered = tef_rounded[test_label_mask]
-    tel_filtered = tel[test_label_mask]
-
-    print(f'Original testing set size: {len(tef_rounded)}')
-    print(f'Filtered testing set size (labels < {test_known_threshold}): {len(tef_rounded_filtered)}')
-
-    # Call the function with the filtered data.
+    # Recognize test data (using all labels).
     confrix, behaviour = recognize_by_memory(
-        eam, tef_rounded_filtered, tel_filtered, msize, min_value, max_value, classifier)
-    
+        eam, tef_rounded, tel, msize, min_value, max_value, classifier)
+
     # If there are no responses, precision is undefined. Let's set it to 0.
     responses = len(tel) - behaviour[constants.no_response_idx]
     if responses > 0:
@@ -478,6 +434,21 @@ def test_memory_sizes(domain, es):
             filling_labels = np.argmax(filling_labels, axis=1)
         if testing_labels.ndim > 1:
             testing_labels = np.argmax(testing_labels, axis=1)
+
+        # Filter the data to include only the classes for the current experiment
+        print(f"Original filling data shape: {filling_features.shape}")
+        print(f"Original testing data shape: {testing_features.shape}")
+
+        filling_mask = filling_labels < constants.n_labels
+        filling_features = filling_features[filling_mask]
+        filling_labels = filling_labels[filling_mask]
+
+        testing_mask = testing_labels < constants.n_labels
+        testing_features = testing_features[testing_mask]
+        testing_labels = testing_labels[testing_mask]
+
+        print(f"Filtered filling data shape: {filling_features.shape}")
+        print(f"Filtered testing data shape: {testing_features.shape}")
 
         behaviours = np.zeros(
             (len(constants.memory_sizes), constants.n_behaviours))
@@ -1217,6 +1188,7 @@ if __name__ == "__main__":
         print(exp_settings.experiment_run_path)
 
         run_evaluation(exp_settings)
+
     elif args['-r']:
         generate_memories(exp_settings)
     elif args['-d']:
