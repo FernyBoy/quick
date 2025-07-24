@@ -360,7 +360,6 @@ def get_ams_results(
         domain, msize, p[constants.xi_idx], p[constants.sigma_idx],
         p[constants.iota_idx], p[constants.kappa_idx])
 
-
     known_threshold = constants.n_labels
     
     if es.experiment_number == 2:
