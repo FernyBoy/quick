@@ -199,7 +199,7 @@ def plot_features_graph(domain, means, stdevs, es):
     """
     ymin = np.PINF
     ymax = np.NINF
-    for i in constants.all_labels:
+    for i in constants.all_n_labels:
         yn = (means[i] - stdevs[i]).min()
         yx = (means[i] + stdevs[i]).max()
         ymin = ymin if ymin < yn else yn
@@ -207,7 +207,7 @@ def plot_features_graph(domain, means, stdevs, es):
     main_step = 100.0 / domain
     xrange = np.arange(0, 100, main_step)
     fmts = constants.label_formats
-    for i in constants.all_labels:
+    for i in constants.all_n_labels:
         plt.clf()
         plt.figure(figsize=(12, 5))
         plt.errorbar(xrange, means[i], fmt=fmts[i],

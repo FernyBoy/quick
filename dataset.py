@@ -12,14 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import gzip
 import numpy as np
 import os
 import random
 import constants
 import keras
 
-# This code is an abstraction for the MNIST Fashion dataset,
+# This code is an abstraction for the Draw Quick! dataset,
 columns = 28
 rows = 28
 
@@ -27,18 +26,17 @@ def get_training(fold):
     return _get_segment(_TRAINING_SEGMENT, fold)
 
 def get_filling(fold):
-    return _get_segment(_FILLING_SEGMENT, fold)
+    return _get_segment(_FILLING_SEGMENT, fold, for_mem=True)
 
-def get_testing(fold, noised = False):
-    return _get_segment(_TESTING_SEGMENT, fold, noised)
+def get_testing(fold, for_mem = False, noised = False):
+    return _get_segment(_TESTING_SEGMENT, fold, for_mem, noised)
 
-def _get_segment(segment, fold, noised = False):
+def _get_segment(segment, num_labels, fold, for_mem = False, noised = False):
     if (_get_segment.data is None) \
         or (_get_segment.noised is None) \
             or (_get_segment.labels is None):
         _get_segment.data, _get_segment.noised, _get_segment.labels = \
             _load_dataset(constants.data_path)
-    print('Delimiting segment of data.')
     total = len(_get_segment.labels)
     training = total*constants.nn_training_percent
     filling = total*constants.am_filling_percent
@@ -65,9 +63,15 @@ def _get_segment(segment, fold, noised = False):
                 else constants.get_data_in_range(_get_segment.data, n, m)
     labels = constants.get_data_in_range(_get_segment.labels, n, m)
     
+    if for_mem:
+        # Filter out samples where label >= constants.n_labels
+        mask = labels < constants.n_labels
+        data = data[mask]
+        labels = labels[mask]
+
     # Convert labels to one-hot encoding
-    labels = keras.utils.to_categorical(labels, num_classes=constants.training_n_labels)
-    
+    if not for_mem:
+        labels = keras.utils.to_categorical(labels, num_classes=num_labels)
     return data, labels
 
 _get_segment.data = None
@@ -124,8 +128,11 @@ def _preprocessed_dataset(path):
         noised = np.load(noised_fname)
         labels = np.load(labels_fname).astype('int')
         print('Preprocessed dataset exists, so it is used.')
-    except:
-        print('Preprocessed dataset does not exist.')
+    except FileNotFoundError:
+        print('Preprocessed dataset does not exist, so it will be created.')
+    except Exception as e:
+        print(f'Error loading preprocessed dataset: {e}')
+        exit(1)
     return data, noised, labels
 
 def _save_dataset(data, noised, labels, path):
@@ -137,29 +144,6 @@ def _save_dataset(data, noised, labels, path):
     np.save(noised_fname, noised)
     np.save(labels_fname, labels)
 
-def _load_mnist(path, kind='train'):
-    """Load MNIST data from `path`"""
-    labels_path = os.path.join(path, '%s-labels-idx1-ubyte.gz' % kind)
-    images_path = os.path.join(path, '%s-images-idx3-ubyte.gz' % kind)
-
-    with gzip.open(labels_path, 'rb') as lbpath:
-        labels = np.frombuffer(lbpath.read(),
-            dtype=np.uint8, offset=8)
-    with gzip.open(images_path, 'rb') as imgpath:
-        images = np.frombuffer(imgpath.read(),
-            dtype=np.uint8, offset=16).reshape(len(labels), 28, 28)
-    return images, labels
-
-def _shuffle(data, noised, labels):
-    print('Shuffling data and labels')
-    tuples = [(data[i], noised[i], labels[i]) for i in range(len(labels))]
-    random.shuffle(tuples)
-    data = np.array([p[0] for p in tuples])
-    noised = np.array([p[1] for p in tuples])
-    labels = np.array([p[2] for p in tuples], dtype=int)
-    return data, noised, labels
-
-
 def _load_quickdraw(path):
     """
     Loads all .npy QuickDraw files in a directory and assigns numeric labels.
@@ -167,9 +151,11 @@ def _load_quickdraw(path):
         data: ndarray of shape (N, 28, 28)
         labels: ndarray of integers of shape (N,)
     """
-    print("Loading QuickDraw .npy files...")
-    files = sorted([f for f in os.listdir(path) if f.endswith('.npy')])
-    files = files[:constants.training_n_labels]  # <-- FIX: Limit files to n_labels
+    print('Loading QuickDraw .npy files...')
+    files = random.shuffle([f for f in os.listdir(path) if f.endswith('.npy')])
+    # Only data that is going to be used for training the neural networks is included
+    # in the dataset.
+    files = files[: constants.training_n_labels]
     data_list = []
     labels_list = []
     label_dict = {}
@@ -182,7 +168,7 @@ def _load_quickdraw(path):
         class_name = filename.replace('full_numpy_bitmap_', '').replace('.npy', '')
         label_dict[label_index] = class_name
 
-        print(f"Loading {class_name} from {full_path}...")
+        print(f'Loading {class_name} from {full_path}...')
         images = np.load(full_path)
         if minimum_images == -1:
             minimum_images = images.shape[0]
@@ -193,7 +179,7 @@ def _load_quickdraw(path):
         temp_data_list.append(images)
         temp_labels_list.append(np.full(len(images), label_index, dtype=int))
 
-    print(f'Minimum images: {minimum_images}')
+    print(f'Balancing the dataset to {minimum_images} per class')
     for data, labels in zip(temp_data_list, temp_labels_list):
         data_list.append(data[:minimum_images])
         labels_list.append(labels[:minimum_images])
@@ -201,5 +187,17 @@ def _load_quickdraw(path):
     data = np.concatenate(data_list, axis=0)
     labels = np.concatenate(labels_list, axis=0)
 
-    print(f"Loaded {data.shape[0]} samples from {len(label_dict)} classes.")
+    print(f'Loaded {data.shape[0]} for each of {len(label_dict)} classes.')
     return data, labels
+
+
+def _shuffle(data, noised, labels):
+    print('Shuffling data and labels')
+    tuples = [(data[i], noised[i], labels[i]) for i in range(len(labels))]
+    random.shuffle(tuples)
+    data = np.array([p[0] for p in tuples])
+    noised = np.array([p[1] for p in tuples])
+    labels = np.array([p[2] for p in tuples], dtype=int)
+    return data, noised, labels
+
+

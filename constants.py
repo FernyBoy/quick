@@ -104,15 +104,24 @@ am_filling_percent = 0.20
 am_testing_percent = 0.10
 noise_percent = 50
 
-n_labels = 8
+# The dataset is large in the number of classes, and we want to use a variable number of
+# such classes. So we have two variables to control the number of classes:
+# training_n_labels and n_labels.
+#
+# The first one is the number of classes used for training the neural networks. It must be
+# the larger one, and it is also used to set the number of classes in the preprocessed dataset.
 training_n_labels = 8
-labels_per_memory = 1
-all_labels = list(range(n_labels))
+
+# The second one is the number of classes used for the memory system. It can be smaller than
+# training_n_labels, and it must be a pair number, because in the negation experiment only 
+# half of the classes are stored in the memory.
+n_labels = 8
+all_n_labels = list(range(n_labels))
 
 def set_n_labels(num_classes):
-    global n_labels, all_labels
+    global n_labels, all_n_labels
     n_labels = num_classes
-    all_labels = list(range(n_labels))
+    all_n_labels = list(range(n_labels))
 
 label_formats = ['r:v', 'y--d', 'g-.4', 'y-.3', 'k-.8', 'y--^',
     'c-..', 'm:*', 'c-1', 'b-p', 'm-.D', 'c:D', 'r--s', 'g:d',
