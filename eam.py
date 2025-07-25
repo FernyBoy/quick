@@ -295,27 +295,16 @@ def recognize_by_memory(eam, tef_rounded, tel, msize, minimum, maximum, classifi
         else:
             unknown += 1
     data = np.array(data)
-    
-    n_exp_classes = es.num_classes
-    predictions_raw = classifier.predict(data)
-    predictions = np.argmax(predictions_raw[:, :n_exp_classes], axis=1)
-
-    #predictions = np.argmax(classifier.predict(data), axis=1)
+    predictions = np.argmax(classifier.predict(data), axis=1)
     for correct, prediction in zip(labels, predictions):
-        # Only count if both the true label and the prediction are within
-        # the scope of the experiment.
-        if correct < constants.n_labels and prediction < constants.n_labels:
-            confrix[correct, prediction] += 1
-
+        # For calculation of per memory precision and recall
+        confrix[correct, prediction] += 1
     behaviour[constants.no_response_idx] = unknown
     behaviour[constants.correct_response_idx] = \
         np.sum([confrix[i, i] for i in range(constants.n_labels)])
 
-    # "No correct" are the items that were recalled by the memory, but not correctly classified.
-    recalled_count = len(labels)
     behaviour[constants.no_correct_response_idx] = \
-        recalled_count - behaviour[constants.correct_response_idx]
-
+        len(tel) - unknown - behaviour[constants.correct_response_idx]
     print(f'Confusion matrix:\n{confrix}')
     print(f'Behaviour: {behaviour}')
     return confrix, behaviour
@@ -349,16 +338,36 @@ def optimum_indexes(precisions, recalls):
     return [t[1] for t in f1s[:constants.n_best_memory_sizes]]
 
 def get_ams_results(midx, msize, domain, trf, tef, trl, tel, classifier, es, fold):
+    for i in range(5):
+        print(" ")
+
+    np.set_printoptions(threshold=200)
+
     print("--------------------------------------------")
     print(f'n_labels = {constants.n_labels}')
     print("--------------------------------------------")
+    
     # Round the values
     max_value = maximum((trf, tef))
     min_value = minimum((trf, tef))
+    print("--------------------------------------------")
+    print(f'max_value = {max_value}')
+    print(f'min_value = {min_value}')
+    print("--------------------------------------------")
+
+    print("--------------------------------------------")
+    print(f'trf= {trf}')
+    print(f'tef = {tef}')
+    print("--------------------------------------------")   
 
     trf_rounded = msize_features(trf, msize, min_value, max_value)
     tef_rounded = msize_features(tef, msize, min_value, max_value)
     behaviour = np.zeros(constants.n_behaviours, dtype=np.float64)
+    print("--------------------------------------------")
+    print(f'trf_rounded = {trf_rounded}')
+    print(f'tef_rounded = {tef_rounded}')
+    print(f'behaviour = {behaviour}')
+    print("--------------------------------------------")
 
     # Create the memory.
     p = es.mem_params
@@ -367,19 +376,37 @@ def get_ams_results(midx, msize, domain, trf, tef, trl, tel, classifier, es, fol
         p[constants.iota_idx], p[constants.kappa_idx])
 
     known_threshold = es.num_classes
-
+    print("--------------------------------------------")
+    print(f'known_threshold = {known_threshold}')
+    print("--------------------------------------------")
+ 
     if es.experiment_number == 2:
         known_threshold = es.num_classes // 2
+        print("--------------------------------------------")
+        print(f'known_threshold = {known_threshold}')
+        print("--------------------------------------------")
     
     known_label_mask = (trl < known_threshold)
     trf_to_register = trf_rounded[known_label_mask]
+    print("--------------------------------------------")
+    print(f'trl = {trl}')
+    print(f'known_label_mask = {known_label_mask}')
+    print(f'trf_to_register = {trf_to_register}')
+    print("--------------------------------------------")
 
     for features in trf_to_register:
         eam.register(features)
 
-    label_mask = (tel < known_threshold)
+    label_mask = (tel < es.num_classes)
     tef_to_recognize = tef_rounded[label_mask]
     tel_to_recognize = tel[label_mask]
+    print("--------------------------------------------")
+    print(f'tel = {tel}')
+    print(f'label_mask = {label_mask}')
+    print(f'tef_to_recognize = {tef_to_recognize}')
+    print(f'tel_to_recognize = {tel_to_recognize}')
+    print("--------------------------------------------")
+
     
     # Recognize test data (using all labels).
     confrix, behaviour = recognize_by_memory(
