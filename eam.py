@@ -279,7 +279,21 @@ def rsize_recall(recall, msize, min_value, max_value):
             / (msize - 1.0) + min_value
 
 
-def recognize_by_memory(eam, tef_rounded, tel, msize, minimum, maximum, classifier):
+def predict_on_subset(model, data, valid_classes):
+    predictions_raw = model.predict(data)  # (n_samples, total_classes)
+    
+    subset_logits = predictions_raw[:, valid_classes]  # (n_samples, len(valid_classes))
+
+    exp_logits = np.exp(subset_logits)
+    softmax_subset = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
+
+    pred_indices = np.argmax(softmax_subset, axis=1)
+
+    predicted_labels = np.array(valid_classes)[pred_indices]
+    
+    return predicted_labels
+
+def recognize_by_memory(eam, tef_rounded, tel, msize, minimum, maximum, classifier, es):
     data = []
     labels = []
     confrix = np.zeros(
@@ -295,7 +309,15 @@ def recognize_by_memory(eam, tef_rounded, tel, msize, minimum, maximum, classifi
         else:
             unknown += 1
     data = np.array(data)
-    predictions = np.argmax(classifier.predict(data), axis=1)
+    
+    # n_exp_classes = es.num_classes
+    # predictions_raw = classifier.predict(data)
+    # predictions = np.argmax(predictions_raw[:, :n_exp_classes], axis=1)
+
+    valid_classes = list(range(es.num_classes))  # ej. [0, 1] si es.classes = 2
+    predictions = predict_on_subset(classifier, data, valid_classes)
+    
+    #predictions = np.argmax(classifier.predict(data), axis=1)
     for correct, prediction in zip(labels, predictions):
         # Only count if both the true label and the prediction are within
         # the scope of the experiment.
@@ -314,7 +336,6 @@ def recognize_by_memory(eam, tef_rounded, tel, msize, minimum, maximum, classifi
     print(f'Confusion matrix:\n{confrix}')
     print(f'Behaviour: {behaviour}')
     return confrix, behaviour
-
 
 
 def split_by_label(fl_pairs):
@@ -344,8 +365,10 @@ def optimum_indexes(precisions, recalls):
     f1s.sort(reverse=True, key=lambda tuple: tuple[0])
     return [t[1] for t in f1s[:constants.n_best_memory_sizes]]
 
-def get_ams_results(
-        midx, msize, domain, trf, tef, trl, tel, classifier, es, fold):
+def get_ams_results(midx, msize, domain, trf, tef, trl, tel, classifier, es, fold):
+    print("--------------------------------------------")
+    print(f'n_labels = {constants.n_labels}')
+    print("--------------------------------------------")
     # Round the values
     max_value = maximum((trf, tef))
     min_value = minimum((trf, tef))
@@ -360,29 +383,33 @@ def get_ams_results(
         domain, msize, p[constants.xi_idx], p[constants.sigma_idx],
         p[constants.iota_idx], p[constants.kappa_idx])
 
-    known_threshold = constants.n_labels
-    
-    if es.experiment_number == 2:
-        known_threshold = constants.n_labels // 2
+    known_threshold = es.num_classes
 
+    if es.experiment_number == 2:
+        known_threshold = es.num_classes // 2
+    
     known_label_mask = (trl < known_threshold)
     trf_to_register = trf_rounded[known_label_mask]
 
     for features in trf_to_register:
         eam.register(features)
 
+    label_mask = (tel < known_threshold)
+    tef_to_recognize = tef_rounded[label_mask]
+    tel_to_recognize = tel[label_mask]
+    
     # Recognize test data (using all labels).
     confrix, behaviour = recognize_by_memory(
-        eam, tef_rounded, tel, msize, min_value, max_value, classifier)
+        eam, tef_to_recognize, tel_to_recognize, msize, min_value, max_value, classifier, es)
 
     # If there are no responses, precision is undefined. Let's set it to 0.
-    responses = len(tel) - behaviour[constants.no_response_idx]
+    responses = len(tel_to_recognize) - behaviour[constants.no_response_idx]
     if responses > 0:
         precision = behaviour[constants.correct_response_idx] / float(responses)
     else:
         precision = 0.0  # Avoid division by zero
 
-    recall = behaviour[constants.correct_response_idx]/float(len(tel))
+    recall = behaviour[constants.correct_response_idx]/float(len(tel_to_recognize))
     behaviour[constants.precision_idx] = precision
     behaviour[constants.recall_idx] = recall
     return midx, eam.entropy, behaviour, confrix
@@ -532,13 +559,13 @@ def test_memory_sizes(domain, es):
 
 def test_filling_percent(
         eam, msize, min_value, max_value,
-        trf, tef, tel, percent, classifier):
+        trf, tef, tel, percent, classifier, es):
     # Registrate filling data.
     for features in trf:
         eam.register(features)
     print(f'Filling of memories done at {percent}%')
     _, behaviour = recognize_by_memory(
-        eam, tef, tel, msize, min_value, max_value, classifier)
+        eam, tef, tel, msize, min_value, max_value, classifier, es)
     responses = len(tel) - behaviour[constants.no_response_idx]
     precision = behaviour[constants.correct_response_idx]/float(responses)
     recall = behaviour[constants.correct_response_idx]/float(len(tel))
@@ -584,6 +611,15 @@ def test_filling_per_fold(mem_size, domain, es, fold):
     if testing_labels.ndim > 1:
         testing_labels = np.argmax(testing_labels, axis=1)
 
+    # Filter the data to include only the classes for the current experiment
+    filling_mask = filling_labels < constants.n_labels
+    filling_features = filling_features[filling_mask]
+    filling_labels = filling_labels[filling_mask]
+
+    testing_mask = testing_labels < constants.n_labels
+    testing_features = testing_features[testing_mask]
+    testing_labels = testing_labels[testing_mask]
+
     max_value = maximum((filling_features, testing_features))
     min_value = minimum((filling_features, testing_features))
     filling_features = msize_features(
@@ -606,7 +642,7 @@ def test_filling_per_fold(mem_size, domain, es, fold):
         behaviour, entropy = \
             test_filling_percent(eam, mem_size,
                                  min_value, max_value, features,
-                                 testing_features, testing_labels, percent, classifier)
+                                 testing_features, testing_labels, percent, classifier, es)
         # A list of tuples (position, label, features)
         # fold_recalls += recalls
         # An array with average entropy per step.

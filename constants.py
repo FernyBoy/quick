@@ -104,7 +104,7 @@ am_filling_percent = 0.20
 am_testing_percent = 0.10
 noise_percent = 50
 
-n_labels = 4
+n_labels = 8
 training_n_labels = 8
 labels_per_memory = 1
 all_labels = list(range(n_labels))
