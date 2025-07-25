@@ -279,20 +279,6 @@ def rsize_recall(recall, msize, min_value, max_value):
             / (msize - 1.0) + min_value
 
 
-def predict_on_subset(model, data, valid_classes):
-    predictions_raw = model.predict(data)  # (n_samples, total_classes)
-    
-    subset_logits = predictions_raw[:, valid_classes]  # (n_samples, len(valid_classes))
-
-    exp_logits = np.exp(subset_logits)
-    softmax_subset = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
-
-    pred_indices = np.argmax(softmax_subset, axis=1)
-
-    predicted_labels = np.array(valid_classes)[pred_indices]
-    
-    return predicted_labels
-
 def recognize_by_memory(eam, tef_rounded, tel, msize, minimum, maximum, classifier, es):
     data = []
     labels = []
@@ -310,13 +296,10 @@ def recognize_by_memory(eam, tef_rounded, tel, msize, minimum, maximum, classifi
             unknown += 1
     data = np.array(data)
     
-    # n_exp_classes = es.num_classes
-    # predictions_raw = classifier.predict(data)
-    # predictions = np.argmax(predictions_raw[:, :n_exp_classes], axis=1)
+    n_exp_classes = es.num_classes
+    predictions_raw = classifier.predict(data)
+    predictions = np.argmax(predictions_raw[:, :n_exp_classes], axis=1)
 
-    valid_classes = list(range(es.num_classes))  # ej. [0, 1] si es.classes = 2
-    predictions = predict_on_subset(classifier, data, valid_classes)
-    
     #predictions = np.argmax(classifier.predict(data), axis=1)
     for correct, prediction in zip(labels, predictions):
         # Only count if both the true label and the prediction are within
