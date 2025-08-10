@@ -1208,15 +1208,15 @@ if __name__ == "__main__":
         experiment = int(args['<experiment>'])
         classes = int(args['<classes>'])
 
-        if experiment != 1 and experiment != 2:
+        if (experiment < 1) or (experiment > 2):
             print(f'Experiment number not valid: {experiment}')
             sys.exit(1)
 
-        if classes < 1:
+        if (classes < 1) or (classes > constants.training_n_labels):
             print(f'Invalid classes number: {classes}')
             sys.exit(1)
-        
-        if experiment == 2 and classes % 2 != 0:
+
+        if (experiment == 2) and (classes % 2 != 0):
             print(f'Invalid classes number: {classes}, must be an even number')
             sys.exit(1)
 
@@ -1224,13 +1224,14 @@ if __name__ == "__main__":
         exp_settings.experiment_number = experiment
         exp_settings.num_classes = classes
 
+        print(f'Running experiment {experiment} with {classes} classes.')
         # Set experiment-specific run path
         exp_run_path = f'exp_{experiment}_classes_{classes}'
         exp_run_full_path = os.path.join(constants.run_path, exp_run_path)
         exp_settings.experiment_run_path = exp_run_path
         constants.create_directory(exp_run_full_path)
         
-        print(exp_settings.experiment_run_path)
+        print(f'Saving results in {exp_settings.experiment_run_path}')
 
         run_evaluation(exp_settings)
 

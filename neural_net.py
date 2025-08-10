@@ -255,8 +255,8 @@ def obtain_features(model_prefix, features_prefix, labels_prefix, data_prefix, e
 
         training_data, training_labels = dataset.get_training(fold)
         filling_data, filling_labels = dataset.get_filling(fold)
-        testing_data, testing_labels = dataset.get_testing(fold)
-        noised_data, noised_labels = dataset.get_testing(fold, noised = True)
+        testing_data, testing_labels = dataset.get_testing(fold, for_mem=True)
+        noised_data, noised_labels = dataset.get_testing(fold, for_mem=True, noised = True)
         settings = [
             (training_data, training_labels, constants.training_suffix),
             (filling_data, filling_labels, constants.filling_suffix),
