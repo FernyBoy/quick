@@ -23,13 +23,13 @@ columns = 28
 rows = 28
 
 def get_training(fold):
-    return _get_segment(_TRAINING_SEGMENT, fold)
+    return _get_segment(_TRAINING_SEGMENT, constants.training_n_labels, fold)
 
 def get_filling(fold):
-    return _get_segment(_FILLING_SEGMENT, fold, for_mem=True)
+    return _get_segment(_FILLING_SEGMENT, constants.n_labels, fold, for_mem=True)
 
 def get_testing(fold, for_mem = False, noised = False):
-    return _get_segment(_TESTING_SEGMENT, fold, for_mem, noised)
+    return _get_segment(_TESTING_SEGMENT, constants.training_n_labels, fold, for_mem, noised)
 
 def _get_segment(segment, num_labels, fold, for_mem = False, noised = False):
     if (_get_segment.data is None) \
@@ -152,7 +152,8 @@ def _load_quickdraw(path):
         labels: ndarray of integers of shape (N,)
     """
     print('Loading QuickDraw .npy files...')
-    files = random.shuffle([f for f in os.listdir(path) if f.endswith('.npy')])
+    files = [f for f in os.listdir(path) if f.endswith('.npy')]
+    random.shuffle(files)
     # Only data that is going to be used for training the neural networks is included
     # in the dataset.
     files = files[: constants.training_n_labels]
