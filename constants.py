@@ -134,7 +134,9 @@ entropy_idx = 3
 no_response_idx = 4
 no_correct_response_idx = 5
 correct_response_idx = 6
-n_behaviours = 7
+correct_no_response_idx = 7
+incorrect_no_response_idx = no_response_idx
+n_behaviours = 8
 
 memory_sizes = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
 memory_fills = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 100.0]
