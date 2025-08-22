@@ -290,8 +290,9 @@ def rsize_recall(recall, msize, min_value, max_value):
 def recognize_by_memory(eam, tef_rounded, tel, msize, minimum, maximum, classifier, threshold, es):
     data = []
     labels = []
+    # The classifier can produce classifications in any of the training_n_labels.
     confrix = np.zeros(
-        (constants.n_labels, constants.n_labels), dtype='int')
+        (constants.n_labels, constants.training_n_labels), dtype='int')
     behaviour = np.zeros(constants.n_behaviours, dtype=np.float64)
     correct_unknown = 0
     incorrect_unknown = 0
@@ -439,7 +440,7 @@ def get_ams_results(midx, msize, domain, trf, tef, trl, tel, classifier, es):
                     + behaviour[constants.correct_response_idx]) / float(len(tel))
 
     behaviour[constants.precision_idx] = precision
-    behaviour[constants.accuracy_idx_idx] = accuracy
+    behaviour[constants.accuracy_idx] = accuracy
     return midx, eam.entropy, behaviour, confrix
 
 def test_memory_sizes(domain, es):
