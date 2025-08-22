@@ -188,7 +188,7 @@ def _load_quickdraw(path):
     data = np.concatenate(data_list, axis=0)
     labels = np.concatenate(labels_list, axis=0)
 
-    print(f'Loaded {data.shape[0]} for each of {len(label_dict)} classes.')
+    print(f'Loaded a total of {data.shape[0]} images of {len(label_dict)} classes.')
     return data, labels
 
 
