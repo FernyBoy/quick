@@ -926,19 +926,21 @@ def decode_test_features(es):
         testing_features_filename = constants.data_filename(
             testing_features_prefix, es, fold)
         testing_features = np.load(testing_features_filename)
-        testing_data, testing_labels = dataset.get_testing(fold)
+        testing_data, testing_labels = dataset.get_testing(fold, for_mem=True)
         noised_features_filename = constants.data_filename(
             noised_features_prefix, es, fold)
         noised_features = np.load(noised_features_filename)
-        noised_data, _ = dataset.get_testing(fold, noised=True)
+        noised_data, _ = dataset.get_testing(fold, for_mem=True, noised=True)
 
         # Loads the decoder.
         model_filename = constants.decoder_filename(model_prefix, es, fold)
         model = tf.keras.models.load_model(model_filename)
         model.summary()
 
-        prod_test_images = model.predict(testing_features)
-        prod_nsed_images = model.predict(noised_features)
+        prod_test_images = model.predict(testing_features)*255
+        prod_nsed_images = model.predict(noised_features)*255
+        testing_data *= 255
+        noised_data *= 255
         n = len(testing_labels)
 
         for (i, testing, prod_test, noised, prod_noise, label) in \
@@ -996,6 +998,10 @@ def store_original_and_test(testing, prod_test, noised, prod_noise,
         directory, idx, label, es, fold)
     prod_noise_filename = constants.prod_noised_image_filename(
         directory, idx, label, es, fold)
+    for file in [testing_filename, prod_test_filename, noised_filename, prod_noise_filename]:
+        dirname = os.path.dirname(file)
+        if not os.path.exists(dirname):
+            os.makedirs(dirname)
     store_image(testing_filename, testing)
     store_image(prod_test_filename, prod_test)
     store_image(noised_filename, noised)
