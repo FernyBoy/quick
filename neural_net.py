@@ -70,25 +70,27 @@ def get_encoder():
     return input_data, output
 
 def get_decoder():
-    input_mem = Input(shape=(constants.domain, ))
+    input_mem = Input(shape=(constants.domain,))
     width = dataset.columns // 4
-    filters = constants.domain // 2
-    dense = Dense(
-        width*width*filters, activation = 'relu',
-        input_shape=(constants.domain, ) )(input_mem)
+    filters = constants.domain // 4
+    dense = Dense(width * width * filters, activation='relu', input_shape=(constants.domain,))(
+        input_mem
+    )
     output = Reshape((width, width, filters))(dense)
-    filters *= 2
     dropout = 0.4
     for i in range(2):
-        trans = Conv2D(kernel_size=3, strides=1,padding='same', activation='relu',
-            filters= filters)(output)
-        pool = UpSampling2D(size=2)(trans)
-        output = SpatialDropout2D(dropout)(pool)
+        trans = Conv2DTranspose(
+            kernel_size=3, strides=2, padding='same', activation='relu', filters=filters
+        )(output)
+        output = SpatialDropout2D(dropout)(trans)
         dropout /= 2.0
-        filters = filters // 2 
+        filters = filters // 4
         output = BatchNormalization()(output)
-    output_img = Conv2D(filters = 1, kernel_size=3, strides=1,activation='sigmoid', padding='same')(output)
-    return input_mem, output_img
+    output = Conv2DTranspose(
+        filters=filters, kernel_size=3, strides=1, activation='sigmoid', padding='same'
+    )(output)
+    return input_mem, output
+
 
 # The number of layers defined in get_classifier.
 classifier_nlayers = 6
