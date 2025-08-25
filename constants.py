@@ -17,7 +17,6 @@ import csv
 import os
 # os.environ['CUDA_VISIBLE_DEVICES']='0'
 import re
-from signal import Sigmasks
 import sys
 import numpy as np
 
@@ -104,16 +103,8 @@ am_filling_percent = 0.20
 am_testing_percent = 0.10
 noise_percent = 50
 
-# The dataset is large in the number of classes, and we want to use a variable number of
-# such classes. So we have two variables to control the number of classes:
-# training_n_labels and n_labels.
-#
-# The first one is the number of classes used for training the neural networks. It must be
-# the larger one, and it is also used to set the number of classes in the preprocessed dataset.
-training_n_labels = 8
-
-# The second one is the number of classes used for the memory system. It can be smaller than
-# training_n_labels, and it must be a pair number, because in the negation experiment only 
+# The number of classes used for training the neural networks, and for testing
+# the memory system. It must be a pair number, because in the negation experiment only 
 # half of the classes are stored in the memory.
 n_labels = 8
 all_n_labels = list(range(n_labels))
@@ -221,12 +212,6 @@ def msize_suffix(msize):
 
 def sigma_suffix(sigma):
     return float_suffix(sigma, 'sgm')
-
-def learned_suffix(learned):
-    return numeric_suffix('lrn', learned)
-
-def stage_suffix(stage):
-    return numeric_suffix('stg', stage)
 
 def dream_depth_suffix(cycle):
     return numeric_suffix('dph', cycle)
