@@ -22,12 +22,19 @@ El script se controla mediante una interfaz de línea de comandos (CLI) definida
 
 ### 3. `-e 1`: Evaluación y Búsqueda de Parámetros
 - **Función:** `run_evaluation()`
-- **Acción:** Esta es una de las fases más críticas. Realiza una búsqueda sistemática para encontrar los mejores hiperparámetros para la memoria asociativa.
+- **Acción:** Esta es una de las fases más críticas. Realiza una búsqueda sistemática para encontrar los mejores hiperparámetros para la memoria asociativa. Se entrenan y evalúan **todas** las clases especificadas.
     - **`test_memory_sizes`**: Itera sobre una lista de posibles tamaños de memoria (`constants.memory_sizes`). Para cada tamaño, entrena la memoria y mide su rendimiento (precisión, recall, entropía) usando validación cruzada.
     - **`test_memory_fills`**: Para los tamaños de memoria que resultaron ser óptimos, analiza cómo varía el rendimiento a medida que la memoria se llena con diferentes porcentajes del corpus de datos (ej. 10%, 20%, ..., 100%).
     - **`save_learned_params`**: Al final, guarda los mejores parámetros encontrados (los tamaños de memoria y porcentajes de llenado más eficientes) en un archivo para su uso en las siguientes fases.
 
-### 4. `-r`: Generación de Recuerdos (Visualización)
+### 4. `-e 2`: Prueba de Detección de Novedad
+- **Función:** `run_evaluation()`
+- **Acción:** Este experimento prueba la capacidad de la memoria para rechazar patrones de clases que no conoce.
+    - **Carga Parcial:** Deliberadamente, solo se entrena la memoria con la **mitad** de las clases disponibles.
+    - **Evaluación Completa:** Se evalúa el rendimiento contra el conjunto de prueba completo, que incluye tanto las clases conocidas como las desconocidas.
+    - **Objetivo:** Medir qué tan efectivamente la memoria rechaza los patrones de las clases que nunca ha visto, evaluando su robustez frente a datos novedosos.
+
+### 5. `-r`: Generación de Recuerdos (Visualización)
 - **Función:** `generate_memories()`
 - **Acción:** Carga los mejores parámetros de memoria encontrados en la fase de evaluación (`-e`).
     1.  Crea una memoria con esa configuración óptima y la llena con los datos de entrenamiento.
@@ -35,7 +42,7 @@ El script se controla mediante una interfaz de línea de comandos (CLI) definida
     3.  Los patrones recordados (vectores de características) se pasan a través del **decodificador** (`decode_memories()`) para reconstruir las imágenes.
     4.  Guarda estas imágenes reconstruidas, permitiendo visualizar qué ha recuperado la memoria y comparar la calidad del recuerdo para datos limpios y con ruido.
 
-### 5. `-d`: Proceso de "Ensoñación" (Dreaming)
+### 6. `-d`: Proceso de "Ensoñación" (Dreaming)
 - **Función:** `dream()`
 - **Acción:** Implementa un fascinante ciclo recurrente para explorar el espacio latente aprendido por el sistema.
     1.  Se parte de un patrón inicial (una imagen de prueba).

@@ -104,9 +104,25 @@ am_filling_percent = 0.20
 am_testing_percent = 0.10
 noise_percent = 50
 
-n_labels = 4
-labels_per_memory = 1
-all_labels = list(range(n_labels))
+# The dataset is large in the number of classes, and we want to use a variable number of
+# such classes. So we have two variables to control the number of classes:
+# training_n_labels and n_labels.
+#
+# The first one is the number of classes used for training the neural networks. It must be
+# the larger one, and it is also used to set the number of classes in the preprocessed dataset.
+training_n_labels = 8
+
+# The second one is the number of classes used for the memory system. It can be smaller than
+# training_n_labels, and it must be a pair number, because in the negation experiment only 
+# half of the classes are stored in the memory.
+n_labels = 8
+all_n_labels = list(range(n_labels))
+
+def set_n_labels(num_classes):
+    global n_labels, all_n_labels
+    n_labels = num_classes
+    all_n_labels = list(range(n_labels))
+
 label_formats = ['r:v', 'y--d', 'g-.4', 'y-.3', 'k-.8', 'y--^',
     'c-..', 'm:*', 'c-1', 'b-p', 'm-.D', 'c:D', 'r--s', 'g:d',
     'm:+', 'y-._', 'm:_', 'y--h', 'g--*', 'm:_', 'g-_', 'm:d']
@@ -118,7 +134,9 @@ entropy_idx = 3
 no_response_idx = 4
 no_correct_response_idx = 5
 correct_response_idx = 6
-n_behaviours = 7
+correct_no_response_idx = 7
+incorrect_no_response_idx = no_response_idx
+n_behaviours = 8
 
 memory_sizes = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
 memory_fills = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 100.0]
@@ -142,9 +160,19 @@ class ExperimentSettings:
             shape = params.shape
             assert(shape[0] == 4)
             self.mem_params = params
+        self.experiment_number = None
+        self.num_classes = None
+        self.experiment_run_path = None
 
     def __str__(self):
-        s = '{Parameters: ' + str(self.mem_params) + '}'
+        s = '{Parameters: ' + str(self.mem_params)
+        if self.experiment_number is not None:
+            s += f', Experiment: {self.experiment_number}'
+        if self.num_classes is not None:
+            s += f', Classes: {self.num_classes}'
+        if self.experiment_run_path is not None:
+            s += f', Run Path: {self.experiment_run_path}'
+        s += '}'
         return s
 
 def print_warning(*s):
@@ -275,7 +303,7 @@ def create_directory(path):
         print(f'Directory {path} already exists.')
     
 
-def filename(name_prefix, es = None, fold = None, extension = ''):
+def filename(name_prefix, es = None, fold = None, extension = '', sub_dir = None):
     """ Returns a file name in run_path directory with a given extension and an index
     """
     # Create target directory & all intermediate directories if don't exists
@@ -284,26 +312,24 @@ def filename(name_prefix, es = None, fold = None, extension = ''):
         print("Directory " , run_path ,  " created ")
     except FileExistsError:
         pass
-    return run_path + '/' + get_full_name(name_prefix,es) \
-        + fold_suffix(fold) + extension
+    if sub_dir:
+        return run_path + '/' + sub_dir + '/' + get_full_name(name_prefix,es) \
+            + fold_suffix(fold) + extension
+    else:
+        return run_path + '/' + get_full_name(name_prefix,es) \
+            + fold_suffix(fold) + extension
 
-# def filename(name_prefix, es=None, fold=None, extension='.keras'):
-#     """ Returns a file name in run_path directory with a given extension and an index """
-#     # Construcción del nombre base
-#     name = name_prefix
 
-#     if es is not None:
-#         name += f'_es_{es:03d}'
-#     if fold is not None:
-#         name += f'_fld_{fold:03d}'
+def csv_filename(name_prefix, es = None, fold = None, sub_dir = None):
+    return filename(name_prefix, es, fold, '.csv', sub_dir)
 
-#     return f'runs/{name}{extension}'
+def data_filename(name_prefix, es = None, fold = None, sub_dir = None):
+    return filename(name_prefix, es, fold, '.npy', sub_dir)
 
-def csv_filename(name_prefix, es = None, fold = None):
-    return filename(name_prefix, es, fold, '.csv')
+def input_data_filename(name_prefix, es=None, fold=None):
+    """Returns a file name for an INPUT npy file, always in the main run_path."""
+    return os.path.join(run_path, get_full_name(name_prefix, es) + fold_suffix(fold) + '.npy')
 
-def data_filename(name_prefix, es = None, fold = None):
-    return filename(name_prefix, es, fold, '.npy')
 
 def json_filename(name_prefix, es):
     return filename(name_prefix, es, extension='.json')
@@ -311,8 +337,8 @@ def json_filename(name_prefix, es):
 def pickle_filename(name_prefix, es = None, fold = None):
     return filename(name_prefix, es, fold, '.pkl')
 
-def picture_filename(name_prefix, es, fold = None):
-    return filename(name_prefix, es, fold, extension='.svg')
+def picture_filename(name_prefix, es, fold = None, sub_dir = None):
+    return filename(name_prefix, es, fold, extension='.svg', sub_dir=sub_dir)
 
 def image_filename(prefix, idx, label, suffix = '', es = None, fold = None):
     name_prefix = image_path + '/' + prefix + '/' + \
@@ -334,16 +360,17 @@ def seed_labels_filename():
     return data_filename(learning_data_seed + labels_suffix)
 
 def model_filename(name_prefix, es, fold):
-    return filename(name_prefix, es, fold)
+    # This function will always point to the main runs directory
+    return os.path.join(run_path, get_full_name(name_prefix, es) + fold_suffix(fold))
 
 def encoder_filename(name_prefix, es, fold):
-    return filename(name_prefix + encoder_suffix, es, fold) + ".keras"
+    return model_filename(name_prefix + encoder_suffix, es, fold) + ".keras"
 
 def classifier_filename(name_prefix, es, fold):
-    return filename(name_prefix + classifier_suffix, es, fold) + ".keras"
+    return model_filename(name_prefix + classifier_suffix, es, fold) + ".keras"
 
 def decoder_filename(name_prefix, es, fold):
-    return filename(name_prefix + decoder_suffix, es, fold) + ".keras"
+    return model_filename(name_prefix + decoder_suffix, es, fold) + ".keras"
 
 def memory_confrix_filename(fill, es, fold):
     prefix = mem_conf_prefix + int_suffix(fill, 'fll')

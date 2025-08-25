@@ -17,7 +17,7 @@
 
 Usage:
   eam -h | --help
-  eam (-n | -f | -e <experiment> | -r | -d) [--domain=DOMAIN] [--runpath=PATH ] [ -l (en | es) ]
+  eam (-n | -f | -e <experiment> <classes> | -r | -d) [--domain=DOMAIN] [--runpath=PATH ] [ -l (en | es) ]
 
 Options:
   -h    Show this screen.
@@ -31,17 +31,15 @@ Options:
   -l        Chooses Language for graphs.
 """
 
-from associative import AssociativeMemory, AssociativeMemorySystem
+from associative import AssociativeMemory
 import constants
 import dataset
 import neural_net
 import typing
 import seaborn
 import json
-import random
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from joblib import Parallel, delayed
 import numpy as np
 import tensorflow as tf
 from itertools import islice
@@ -50,6 +48,7 @@ import gc
 from docopt import docopt
 import png
 import sys
+import os
 sys.setrecursionlimit(10000)
 
 
@@ -63,7 +62,7 @@ if typing.TYPE_CHECKING:
 gettext.install('eam', localedir=None, names=None)
 
 
-def plot_pre_graph(pre_mean, rec_mean, ent_mean, pre_std, rec_std,
+def plot_pre_graph(pre_mean, acc_mean, ent_mean, pre_std, acc_std,
                    es, tag='', xlabels=constants.memory_sizes,
                    xtitle=None, ytitle=None):
 
@@ -86,7 +85,7 @@ def plot_pre_graph(pre_mean, rec_mean, ent_mean, pre_std, rec_std,
     pre_mean = np.nan_to_num(pre_mean, copy=False, nan=100.0)
 
     plt.errorbar(x, pre_mean, fmt='r-o', yerr=pre_std, label=_('Precision'))
-    plt.errorbar(x, rec_mean, fmt='b--s', yerr=rec_std, label=_('Recall'))
+    plt.errorbar(x, acc_mean, fmt='b--s', yerr=acc_std, label=_('Accuracy'))
     plt.xlim(0, xmax)
     plt.ylim(0, ymax)
     plt.xticks(x, xlabels)
@@ -115,7 +114,7 @@ def plot_pre_graph(pre_mean, rec_mean, ent_mean, pre_std, rec_std,
     cbar.set_label(_('Entropy'))
 
     s = tag + 'graph_prse_MEAN' + _('-english')
-    graph_filename = constants.picture_filename(s, es)
+    graph_filename = constants.picture_filename(s, es, None, es.experiment_run_path)
     plt.savefig(graph_filename, dpi=600)
 
 
@@ -149,11 +148,12 @@ def plot_size_graph(response_size, size_stdev, es):
     plt.savefig(graph_filename, dpi=600)
 
 
-def plot_behs_graph(no_response, no_correct, correct, es):
+def plot_behs_graph(no_response, correct_no_response, incorrect_no_response, no_correct, correct, es, xtitle=None, ytitle=None):
 
     for i in range(len(no_response)):
-        total = (no_response[i] + no_correct[i] + correct[i])/100.0
-        no_response[i] /= total
+        total = (incorrect_no_response[i] + correct_no_response[i] + no_correct[i] + correct[i])/100.0
+        correct_no_response[i] /= total
+        incorrect_no_response
         no_correct[i] /= total
         correct[i] /= total
 
@@ -172,22 +172,29 @@ def plot_behs_graph(no_response, no_correct, correct, es):
 
     plt.bar(x, correct, width, label=_('Correct response'))
     cumm = np.array(correct)
-    plt.bar(x, no_correct, width, bottom=cumm, label=_('No correct response'))
+    plt.bar(x, no_correct, width, bottom=cumm, label=_('Incorrect response'))
     cumm += np.array(no_correct)
-    plt.bar(x, no_response, width, bottom=cumm, label=_('No response'))
+    plt.bar(x, correct_no_response, width, bottom=cumm, label=_('Correct no response'))
+    cumm += np.array(correct_no_response)
+    plt.bar(x, incorrect_no_response, width, bottom=cumm, label=_('Incorrect no response'))
+    cumm += np.array(incorrect_no_response)
 
     plt.xlim(-width, xmax + width)
     plt.ylim(0.0, ymax)
     plt.xticks(x, constants.memory_sizes)
 
-    plt.xlabel(_('Range Quantization Levels'))
-    plt.ylabel(_('Labels'))
+    if xtitle is None:
+        xtitle = _('Range Quantization Levels')
+    if ytitle is None:
+        ytitle = _('Labels')
+    plt.xlabel(xtitle)
+    plt.ylabel(ytitle)
 
     plt.legend(loc=0)
     plt.grid(axis='y')
 
     graph_filename = constants.picture_filename(
-        'graph_behaviours_MEAN' + _('-english'), es)
+        'graph_behaviours_MEAN' + _('-english'), es, None, es.experiment_run_path)
     plt.savefig(graph_filename, dpi=600)
 
 
@@ -198,7 +205,7 @@ def plot_features_graph(domain, means, stdevs, es):
     """
     ymin = np.PINF
     ymax = np.NINF
-    for i in constants.all_labels:
+    for i in constants.all_n_labels:
         yn = (means[i] - stdevs[i]).min()
         yx = (means[i] + stdevs[i]).max()
         ymin = ymin if ymin < yn else yn
@@ -206,7 +213,7 @@ def plot_features_graph(domain, means, stdevs, es):
     main_step = 100.0 / domain
     xrange = np.arange(0, 100, main_step)
     fmts = constants.label_formats
-    for i in constants.all_labels:
+    for i in constants.all_n_labels:
         plt.clf()
         plt.figure(figsize=(12, 5))
         plt.errorbar(xrange, means[i], fmt=fmts[i],
@@ -223,10 +230,10 @@ def plot_features_graph(domain, means, stdevs, es):
         plt.savefig(constants.picture_filename(filename, es), dpi=600)
 
 
-def plot_conf_matrix(matrix, tags, prefix, es):
+def plot_conf_matrix(matrix, xtags, ytags, prefix, es):
     plt.clf()
     plt.figure(figsize=(6.4, 4.8))
-    seaborn.heatmap(matrix, xticklabels=tags, yticklabels=tags,
+    seaborn.heatmap(matrix, xticklabels=xtags, yticklabels=ytags,
                     vmin=0.0, vmax=1.0, annot=False, cmap='Blues')
     plt.xlabel(_('Prediction'))
     plt.ylabel(_('Label'))
@@ -264,7 +271,10 @@ def minimum(arrays):
 
 
 def msize_features(features, msize, min_value, max_value):
-    return np.round((msize-1)*(features-min_value) / (max_value-min_value)).astype(int)
+    if max_value == min_value:
+        return np.zeros_like(features, dtype=int)
+    else:
+        return np.round((msize-1)*(features-min_value) / (max_value-min_value)).astype(int)
 
 
 def rsize_recall(recall, msize, min_value, max_value):
@@ -275,32 +285,40 @@ def rsize_recall(recall, msize, min_value, max_value):
             / (msize - 1.0) + min_value
 
 
-def recognize_by_memory(eam, tef_rounded, tel, msize, minimum, maximum, classifier):
+def recognize_by_memory(eam, tef_rounded, tel, msize, minimum, maximum, classifier, threshold, es):
     data = []
     labels = []
+    # The classifier can produce classifications in any of the training_n_labels.
     confrix = np.zeros(
-        (constants.n_labels, constants.n_labels), dtype='int')
+        (constants.n_labels, constants.training_n_labels), dtype='int')
     behaviour = np.zeros(constants.n_behaviours, dtype=np.float64)
-    unknown = 0
+    correct_unknown = 0
+    incorrect_unknown = 0
     for features, label in zip(tef_rounded, tel):
         memory, recognized, _ = eam.recall(features)
         if recognized:
             mem = rsize_recall(memory, msize, minimum, maximum)
             data.append(mem)
             labels.append(label)
+        elif label < threshold:
+            incorrect_unknown += 1
         else:
-            unknown += 1
+            correct_unknown += 1
     data = np.array(data)
     predictions = np.argmax(classifier.predict(data), axis=1)
     for correct, prediction in zip(labels, predictions):
         # For calculation of per memory precision and recall
         confrix[correct, prediction] += 1
-    behaviour[constants.no_response_idx] = unknown
+    if es.experiment_number == 1:
+        behaviour[constants.no_response_idx] = incorrect_unknown
+    elif es.experiment_number == 2:
+        behaviour[constants.correct_no_response_idx] = correct_unknown
+        behaviour[constants.incorrect_no_response_idx] = incorrect_unknown
     behaviour[constants.correct_response_idx] = \
-        np.sum([confrix[i, i] for i in range(constants.n_labels)])
+        np.sum([confrix[i, i] for i in range(threshold)])
 
     behaviour[constants.no_correct_response_idx] = \
-        len(tel) - unknown - behaviour[constants.correct_response_idx]
+        len(tel) - correct_unknown - incorrect_unknown - behaviour[constants.correct_response_idx]
     print(f'Confusion matrix:\n{confrix}')
     print(f'Behaviour: {behaviour}')
     return confrix, behaviour
@@ -333,16 +351,37 @@ def optimum_indexes(precisions, recalls):
     f1s.sort(reverse=True, key=lambda tuple: tuple[0])
     return [t[1] for t in f1s[:constants.n_best_memory_sizes]]
 
+def get_ams_results(midx, msize, domain, trf, tef, trl, tel, classifier, es):
+    for i in range(5):
+        print(" ")
 
-def get_ams_results(
-        midx, msize, domain, trf, tef, trl, tel, classifier, es, fold):
+    np.set_printoptions(threshold=200)
+
+    print("--------------------------------------------")
+    print(f'n_labels = {constants.n_labels}')
+    print("--------------------------------------------")
+    
     # Round the values
     max_value = maximum((trf, tef))
     min_value = minimum((trf, tef))
+    print("--------------------------------------------")
+    print(f'max_value = {max_value}')
+    print(f'min_value = {min_value}')
+    print("--------------------------------------------")
+
+    print("--------------------------------------------")
+    print(f'trf= {trf}')
+    print(f'tef = {tef}')
+    print("--------------------------------------------")   
 
     trf_rounded = msize_features(trf, msize, min_value, max_value)
     tef_rounded = msize_features(tef, msize, min_value, max_value)
     behaviour = np.zeros(constants.n_behaviours, dtype=np.float64)
+    print("--------------------------------------------")
+    print(f'trf_rounded = {trf_rounded}')
+    print(f'tef_rounded = {tef_rounded}')
+    print(f'behaviour = {behaviour}')
+    print("--------------------------------------------")
 
     # Create the memory.
     p = es.mem_params
@@ -350,44 +389,67 @@ def get_ams_results(
         domain, msize, p[constants.xi_idx], p[constants.sigma_idx],
         p[constants.iota_idx], p[constants.kappa_idx])
 
-    # EXPERIMENT MODIFICATION: Only train with the first half of labels
-    known_threshold = constants.n_labels // 2
-    # Create a mask to filter only the samples with labels in the first half
+    known_threshold = es.num_classes
+    print("--------------------------------------------")
+    print(f'known_threshold = {known_threshold}')
+    print("--------------------------------------------")
+ 
+    if es.experiment_number == 2:
+        known_threshold = es.num_classes // 2
+        print("--------------------------------------------")
+        print(f'Adjusted known_threshold = {known_threshold}')
+        print("--------------------------------------------")
+    
     known_label_mask = (trl < known_threshold)
-    trf_filtered = trf_rounded[known_label_mask]
+    trf_to_register = trf_rounded[known_label_mask]
+    print("--------------------------------------------")
+    print(f'trl = {trl.shape}')
+    print(f'trf_to_register = {trf_to_register.shape}')
+    print("--------------------------------------------")
 
-    print(f'Total labels: {constants.n_labels}. Known threshold: {known_threshold}')
-    print(f'Original filling set size: {len(trf_rounded)}')
-    print(f'Filtered filling set size (labels < {known_threshold}): {len(trf_filtered)}')
-
-    # Registrate filling data.
-    for features in trf_filtered:
+    for features in trf_to_register:
         eam.register(features)
 
-    # Recognize test data (using all labels).
+    # Recognize test data.
     confrix, behaviour = recognize_by_memory(
-        eam, tef_rounded, tel, msize, min_value, max_value, classifier)
-    
+        eam, tef_rounded, tel, msize, min_value, max_value, classifier, known_threshold, es)
+
     # If there are no responses, precision is undefined. Let's set it to 0.
-    responses = len(tel) - behaviour[constants.no_response_idx]
-    if responses > 0:
-        precision = behaviour[constants.correct_response_idx] / float(responses)
-    else:
-        precision = 0.0  # Avoid division by zero
+    if es.experiment_number == 1:
+        responses = len(tel) - behaviour[constants.no_response_idx]
+        if responses > 0:
+            precision = behaviour[constants.correct_response_idx] / float(responses)
+        else:
+            precision = 0.0  # Avoid division by zero
 
-    recall = behaviour[constants.correct_response_idx]/float(len(tel))
+        accuracy = behaviour[constants.correct_response_idx]/float(len(tel))
+    elif es.experiment_number == 2:
+        pass
+        # For this experiment we need to split the no_response_idx into 
+        # correct_no_response_idx (for classes that should be rejected) and 
+        # incorrect_no_response_idx (for classes that should not be rejected).
+        responses = len(tel) - behaviour[constants.incorrect_no_response_idx]
+        if responses > 0:
+            correct = behaviour[constants.correct_no_response_idx] + behaviour[constants.correct_response_idx]
+            precision = correct / float(responses)
+        else:
+            precision = 0.0  # Avoid division by zero
+        accuracy = (behaviour[constants.correct_no_response_idx]
+                    + behaviour[constants.correct_response_idx]) / float(len(tel))
+
     behaviour[constants.precision_idx] = precision
-    behaviour[constants.recall_idx] = recall
+    behaviour[constants.accuracy_idx] = accuracy
     return midx, eam.entropy, behaviour, confrix
-
 
 def test_memory_sizes(domain, es):
     all_entropies = []
     precision = []
-    recall = []
+    accuracy = []
     all_confrixes = []
 
     no_response = []
+    correct_no_response = []
+    incorrect_no_response = []
     no_correct_response = []
     correct_response = []
 
@@ -403,18 +465,18 @@ def test_memory_sizes(domain, es):
         print(f'Fold: {fold}')
         suffix = constants.filling_suffix
         filling_features_filename = constants.features_name(es) + suffix
-        filling_features_filename = constants.data_filename(
+        filling_features_filename = constants.input_data_filename(
             filling_features_filename, es, fold)
         filling_labels_filename = constants.labels_name(es) + suffix
-        filling_labels_filename = constants.data_filename(
+        filling_labels_filename = constants.input_data_filename(
             filling_labels_filename, es, fold)
 
         suffix = constants.testing_suffix
         testing_features_filename = constants.features_name(es) + suffix
-        testing_features_filename = constants.data_filename(
+        testing_features_filename = constants.input_data_filename(
             testing_features_filename, es, fold)
         testing_labels_filename = constants.labels_name(es) + suffix
-        testing_labels_filename = constants.data_filename(
+        testing_labels_filename = constants.input_data_filename(
             testing_labels_filename, es, fold)
 
         filling_features = np.load(filling_features_filename)
@@ -422,11 +484,20 @@ def test_memory_sizes(domain, es):
         testing_features = np.load(testing_features_filename)
         testing_labels = np.load(testing_labels_filename)
 
-        # Convert labels from one-hot back to integer format
-        if filling_labels.ndim > 1:
-            filling_labels = np.argmax(filling_labels, axis=1)
-        if testing_labels.ndim > 1:
-            testing_labels = np.argmax(testing_labels, axis=1)
+        print(f"Original filling data shape: {filling_features.shape}")
+        print(f"Original testing data shape: {testing_features.shape}")
+
+        # Filter the data to include only the classes for the current experiment
+        filling_mask = filling_labels < constants.n_labels
+        filling_features = filling_features[filling_mask]
+        filling_labels = filling_labels[filling_mask]
+
+        testing_mask = testing_labels < constants.n_labels
+        testing_features = testing_features[testing_mask]
+        testing_labels = testing_labels[testing_mask]
+
+        print(f"Filtered filling data shape: {filling_features.shape}")
+        print(f"Filtered testing data shape: {testing_features.shape}")
 
         behaviours = np.zeros(
             (len(constants.memory_sizes), constants.n_behaviours))
@@ -437,7 +508,7 @@ def test_memory_sizes(domain, es):
             print(f'Memory size: {msize}')
             results = get_ams_results(midx, msize, domain,
                                       filling_features, testing_features,
-                                      filling_labels, testing_labels, classifier, es, fold)
+                                      filling_labels, testing_labels, classifier, es)
             measures.append(results)
         for midx, entropy, behaviour, confrix in measures:
             entropies.append(entropy)
@@ -452,10 +523,12 @@ def test_memory_sizes(domain, es):
 
         # Average precision and recall as percentage
         precision.append(behaviours[:, constants.precision_idx]*100)
-        recall.append(behaviours[:, constants.recall_idx]*100)
+        accuracy.append(behaviours[:, constants.accuracy_idx]*100)
 
         all_confrixes.append(np.array(confrixes))
         no_response.append(behaviours[:, constants.no_response_idx])
+        correct_no_response.append(behaviours[:, constants.correct_no_response_idx])
+        incorrect_no_response.append(behaviours[:, constants.incorrect_no_response_idx])
         no_correct_response.append(
             behaviours[:, constants.no_correct_response_idx])
         correct_response.append(behaviours[:, constants.correct_response_idx])
@@ -463,61 +536,67 @@ def test_memory_sizes(domain, es):
     # Every row is training fold, and every column is a memory size.
     all_entropies = np.array(all_entropies)
     precision = np.array(precision)
-    recall = np.array(recall)
+    accuracy = np.array(accuracy)
     all_confrixes = np.array(all_confrixes)
 
     average_entropy = np.mean(all_entropies, axis=0)
     average_precision = np.mean(precision, axis=0)
     stdev_precision = np.std(precision, axis=0)
-    average_recall = np.mean(recall, axis=0)
-    stdev_recall = np.std(recall, axis=0)
+    average_accuracy = np.mean(accuracy, axis=0)
+    stdev_accuracy = np.std(accuracy, axis=0)
     average_confrixes = np.mean(all_confrixes, axis=0)
 
     no_response = np.array(no_response)
+    correct_no_response = np.array(correct_no_response)
+    incorrect_no_response = np.array(incorrect_no_response)
     no_correct_response = np.array(no_correct_response)
     correct_response = np.array(correct_response)
     mean_no_response = np.mean(no_response, axis=0)
     stdv_no_response = np.std(no_response, axis=0)
+    mean_correct_no_response = np.mean(correct_no_response, axis=0)
+    stdv_correct_no_response = np.std(correct_no_response, axis=0)
+    mean_incorrect_no_response = np.mean(incorrect_no_response, axis=0)
+    stdv_incorrect_no_response = np.std(incorrect_no_response, axis=0)
     mean_no_correct_response = np.mean(no_correct_response, axis=0)
     stdv_no_correct_response = np.std(no_correct_response, axis=0)
     mean_correct_response = np.mean(correct_response, axis=0)
     stdv_correct_response = np.std(correct_response, axis=0)
-    best_memory_idx = optimum_indexes(average_precision, average_recall)
+    best_memory_idx = optimum_indexes(average_precision, average_accuracy)
     best_memory_sizes = [constants.memory_sizes[i] for i in best_memory_idx]
     mean_behaviours = \
-        [mean_no_response, mean_no_correct_response, mean_correct_response]
+        [mean_no_response, mean_correct_no_response, mean_incorrect_no_response, mean_no_correct_response, mean_correct_response]
     stdv_behaviours = \
-        [stdv_no_response, stdv_no_correct_response, stdv_correct_response]
+        [stdv_no_response, stdv_correct_no_response, stdv_incorrect_no_response, stdv_no_correct_response, stdv_correct_response]
 
     np.savetxt(constants.csv_filename(
-        'memory_precision', es), precision, delimiter=',')
+        'memory_precision', es, None, es.experiment_run_path), precision, delimiter=',')
     np.savetxt(constants.csv_filename(
-        'memory_recall', es), recall, delimiter=',')
+        'memory_recall', es, None, es.experiment_run_path), accuracy, delimiter=',')
     np.savetxt(constants.csv_filename(
-        'memory_entropy', es), all_entropies, delimiter=',')
-    np.savetxt(constants.csv_filename('mean_behaviours', es),
+        'memory_entropy', es, None, es.experiment_run_path), all_entropies, delimiter=',')
+    np.savetxt(constants.csv_filename('mean_behaviours', es, None, es.experiment_run_path),
                mean_behaviours, delimiter=',')
-    np.savetxt(constants.csv_filename('stdv_behaviours', es),
+    np.savetxt(constants.csv_filename('stdv_behaviours', es, None, es.experiment_run_path),
                stdv_behaviours, delimiter=',')
-    np.save(constants.data_filename('memory_confrixes', es), average_confrixes)
-    np.save(constants.data_filename('behaviours', es), behaviours)
-    plot_pre_graph(average_precision, average_recall, average_entropy,
-                   stdev_precision, stdev_recall, es)
-    plot_behs_graph(mean_no_response, mean_no_correct_response,
-                    mean_correct_response, es)
+    np.save(constants.data_filename('memory_confrixes', es, None, es.experiment_run_path), average_confrixes)
+    np.save(constants.data_filename('behaviours', es, None, es.experiment_run_path), behaviours)
+    plot_pre_graph(average_precision, average_accuracy, average_entropy,
+                   stdev_precision, stdev_accuracy, es)
+    plot_behs_graph(mean_no_response, mean_correct_no_response, mean_incorrect_no_response,
+                    mean_no_correct_response, mean_correct_response, es, xtitle = 'Memory size (rows)')
     print('Memory size evaluation completed!')
     return best_memory_sizes
 
 
 def test_filling_percent(
         eam, msize, min_value, max_value,
-        trf, tef, tel, percent, classifier):
+        trf, tef, tel, percent, classifier, threshold, es):
     # Registrate filling data.
     for features in trf:
         eam.register(features)
     print(f'Filling of memories done at {percent}%')
     _, behaviour = recognize_by_memory(
-        eam, tef, tel, msize, min_value, max_value, classifier)
+        eam, tef, tel, msize, min_value, max_value, classifier, threshold, es)
     responses = len(tel) - behaviour[constants.no_response_idx]
     precision = behaviour[constants.correct_response_idx]/float(responses)
     recall = behaviour[constants.correct_response_idx]/float(len(tel))
@@ -538,18 +617,18 @@ def test_filling_per_fold(mem_size, domain, es, fold):
 
     suffix = constants.filling_suffix
     filling_features_filename = constants.features_name(es) + suffix
-    filling_features_filename = constants.data_filename(
+    filling_features_filename = constants.input_data_filename(
         filling_features_filename, es, fold)
     filling_labels_filename = constants.labels_name(es) + suffix
-    filling_labels_filename = constants.data_filename(
+    filling_labels_filename = constants.input_data_filename(
         filling_labels_filename, es, fold)
 
     suffix = constants.testing_suffix
     testing_features_filename = constants.features_name(es) + suffix
-    testing_features_filename = constants.data_filename(
+    testing_features_filename = constants.input_data_filename(
         testing_features_filename, es, fold)
     testing_labels_filename = constants.labels_name(es) + suffix
-    testing_labels_filename = constants.data_filename(
+    testing_labels_filename = constants.input_data_filename(
         testing_labels_filename, es, fold)
 
     filling_features = np.load(filling_features_filename)
@@ -557,11 +636,10 @@ def test_filling_per_fold(mem_size, domain, es, fold):
     testing_features = np.load(testing_features_filename)
     testing_labels = np.load(testing_labels_filename)
 
-    # Convert labels from one-hot back to integer format
-    if filling_labels.ndim > 1:
-        filling_labels = np.argmax(filling_labels, axis=1)
-    if testing_labels.ndim > 1:
-        testing_labels = np.argmax(testing_labels, axis=1)
+    # Filter the data to include only the classes for the current experiment
+    filling_mask = filling_labels < constants.n_labels
+    filling_features = filling_features[filling_mask]
+    filling_labels = filling_labels[filling_mask]
 
     max_value = maximum((filling_features, testing_features))
     min_value = minimum((filling_features, testing_features))
@@ -569,6 +647,24 @@ def test_filling_per_fold(mem_size, domain, es, fold):
         filling_features, mem_size, min_value, max_value)
     testing_features = msize_features(
         testing_features, mem_size, min_value, max_value)
+
+    known_threshold = es.num_classes
+    print('--------------------------------------------')
+    print(f'known_threshold = {known_threshold}')
+    print('--------------------------------------------')
+
+    if es.experiment_number == 2:
+        known_threshold = es.num_classes // 2
+        print('--------------------------------------------')
+        print(f'Adjusted known_threshold = {known_threshold}')
+        print('--------------------------------------------')
+
+    known_label_mask = filling_labels < known_threshold
+    filling_features = filling_features[known_label_mask]
+    print('--------------------------------------------')
+    print(f'filling labels shape = {filling_labels.shape}')
+    print(f'filling features shape = {filling_features.shape}')
+    print('--------------------------------------------')
 
     total = len(filling_labels)
     percents = np.array(constants.memory_fills)
@@ -585,7 +681,7 @@ def test_filling_per_fold(mem_size, domain, es, fold):
         behaviour, entropy = \
             test_filling_percent(eam, mem_size,
                                  min_value, max_value, features,
-                                 testing_features, testing_labels, percent, classifier)
+                                 testing_features, testing_labels, percent, classifier, known_threshold, es)
         # A list of tuples (position, label, features)
         # fold_recalls += recalls
         # An array with average entropy per step.
@@ -632,27 +728,27 @@ def test_memory_fills(domain, mem_sizes, es):
 
         np.savetxt(
             constants.csv_filename(
-                'main_average_precision' + constants.numeric_suffix('sze', mem_size), es),
+                'main_average_precision' + constants.numeric_suffix('sze', mem_size), es, None, es.experiment_run_path),
             main_avrge_precisions, delimiter=',')
         np.savetxt(
             constants.csv_filename(
-                'main_average_recall' + constants.numeric_suffix('sze', mem_size), es),
+                'main_average_recall' + constants.numeric_suffix('sze', mem_size), es, None, es.experiment_run_path),
             main_avrge_recalls, delimiter=',')
         np.savetxt(
             constants.csv_filename(
-                'main_average_entropy' + constants.numeric_suffix('sze', mem_size), es),
+                'main_average_entropy' + constants.numeric_suffix('sze', mem_size), es, None, es.experiment_run_path),
             main_avrge_entropies, delimiter=',')
         np.savetxt(
             constants.csv_filename(
-                'main_stdev_precision' + constants.numeric_suffix('sze', mem_size), es),
+                'main_stdev_precision' + constants.numeric_suffix('sze', mem_size), es, None, es.experiment_run_path),
             main_stdev_precisions, delimiter=',')
         np.savetxt(
             constants.csv_filename(
-                'main_stdev_recall' + constants.numeric_suffix('sze', mem_size), es),
+                'main_stdev_recall' + constants.numeric_suffix('sze', mem_size), es, None, es.experiment_run_path),
             main_stdev_recalls, delimiter=',')
         np.savetxt(
             constants.csv_filename(
-                'main_stdev_entropy' + constants.numeric_suffix('sze', mem_size), es),
+                'main_stdev_entropy' + constants.numeric_suffix('sze', mem_size), es, None, es.experiment_run_path),
             main_stdev_entropies, delimiter=',')
 
         plot_pre_graph(main_avrge_precisions*100, main_avrge_recalls*100, main_avrge_entropies,
@@ -686,14 +782,14 @@ def save_history(history, prefix, es):
 
 def save_conf_matrix(matrix, prefix, es):
     name = prefix + constants.matrix_suffix
-    plot_conf_matrix(matrix, range(constants.n_labels), name, es)
+    plot_conf_matrix(matrix, range(constants.traning_n_labels), range(constants.n_labels), name, es)
     filename = constants.data_filename(name, es)
     np.save(filename, matrix)
 
 
 def save_learned_params(mem_sizes, fill_percents, es):
     name = constants.learn_params_name(es)
-    filename = constants.data_filename(name, es)
+    filename = constants.data_filename(name, es, None, es.experiment_run_path)
     np.save(filename, np.array([mem_sizes, fill_percents], dtype=int))
 
 
@@ -730,17 +826,17 @@ def remember(msize, mfill, es):
             print(f'Running remembering for fold: {fold}')
             suffix = constants.filling_suffix
             filling_features_filename = constants.features_name(es) + suffix
-            filling_features_filename = constants.data_filename(
+            filling_features_filename = constants.input_data_filename(
                 filling_features_filename, es, fold)
 
             suffix = constants.testing_suffix
             testing_features_filename = constants.features_name(es) + suffix
-            testing_features_filename = constants.data_filename(
+            testing_features_filename = constants.input_data_filename(
                 testing_features_filename, es, fold)
 
             suffix = constants.noised_suffix
             noised_features_filename = constants.features_name(es) + suffix
-            noised_features_filename = constants.data_filename(
+            noised_features_filename = constants.input_data_filename(
                 noised_features_filename, es, fold)
 
             filling_features = np.load(filling_features_filename)
@@ -822,34 +918,29 @@ def decode_test_features(es):
     generated by the encoder.
     """
     model_prefix = constants.model_name(es)
-    suffix = constants.testing_suffix
-    testing_features_prefix = constants.features_prefix + suffix
-    testing_labels_prefix = constants.labels_prefix + suffix
-    testing_data_prefix = constants.data_prefix + suffix
-
-    suffix = constants.noised_suffix
-    noised_features_prefix = constants.features_prefix + suffix
-    noised_labels_prefix = constants.labels_prefix + suffix
-    noised_data_prefix = constants.data_prefix + suffix
+    testing_features_prefix = constants.features_prefix + constants.testing_suffix
+    noised_features_prefix = constants.features_prefix + constants.noised_suffix
 
     for fold in range(constants.n_folds):
         # Load test features and labels
         testing_features_filename = constants.data_filename(
             testing_features_prefix, es, fold)
         testing_features = np.load(testing_features_filename)
-        testing_data, testing_labels = dataset.get_testing(fold)
+        testing_data, testing_labels = dataset.get_testing(fold, for_mem=True)
         noised_features_filename = constants.data_filename(
             noised_features_prefix, es, fold)
         noised_features = np.load(noised_features_filename)
-        noised_data, _ = dataset.get_testing(fold, noised=True)
+        noised_data, _ = dataset.get_testing(fold, for_mem=True, noised=True)
 
         # Loads the decoder.
         model_filename = constants.decoder_filename(model_prefix, es, fold)
         model = tf.keras.models.load_model(model_filename)
         model.summary()
 
-        prod_test_images = model.predict(testing_features)
-        prod_nsed_images = model.predict(noised_features)
+        prod_test_images = model.predict(testing_features)*255
+        prod_nsed_images = model.predict(noised_features)*255
+        testing_data *= 255
+        noised_data *= 255
         n = len(testing_labels)
 
         for (i, testing, prod_test, noised, prod_noise, label) in \
@@ -907,6 +998,10 @@ def store_original_and_test(testing, prod_test, noised, prod_noise,
         directory, idx, label, es, fold)
     prod_noise_filename = constants.prod_noised_image_filename(
         directory, idx, label, es, fold)
+    for file in [testing_filename, prod_test_filename, noised_filename, prod_noise_filename]:
+        dirname = os.path.dirname(file)
+        if not os.path.exists(dirname):
+            os.makedirs(dirname)
     store_image(testing_filename, testing)
     store_image(prod_test_filename, prod_test)
     store_image(noised_filename, noised)
@@ -1084,11 +1179,28 @@ def create_and_train_autoencoders(es):
 
 
 def run_evaluation(es):
-    best_memory_sizes = test_memory_sizes(constants.domain, es)
-    print(f'Best memory sizes: {best_memory_sizes}')
-    best_filling_percents = test_memory_fills(
-        constants.domain, best_memory_sizes, es)
-    save_learned_params(best_memory_sizes, best_filling_percents, es)
+    """Run evaluation for the given experimental settings.
+
+       The first experiment tests different memory sizes,
+       and it chooses the best ones. Then it evaluates filling percentages and
+       it chooses the best ones too.
+
+       The second experiment assumes the best memory sizes have been selected,
+       and it only evaluates filling percentages, but it does not stores them.
+    """
+    if es.experiment_number == 1:
+        best_memory_sizes = test_memory_sizes(constants.domain, es)
+        print(f'Best memory sizes: {best_memory_sizes}')
+        best_filling_percents = test_memory_fills(
+            constants.domain, best_memory_sizes, es)
+        save_learned_params(best_memory_sizes, best_filling_percents, es)
+    elif es.experiment_number == 2:
+        # Load the learned parameters.
+        learned = load_learned_params(es)
+        best_memory_sizes = [msize for msize, _ in learned]
+        print(f'Best memory sizes: {best_memory_sizes}')
+        # Evaluate the memories with the learned parameters.
+        test_memory_fills(constants.domain, best_memory_sizes, es)
 
 
 def generate_memories(es):
@@ -1139,10 +1251,33 @@ if __name__ == "__main__":
         produce_features_from_data(exp_settings)
     elif args['-e']:
         experiment = int(args['<experiment>'])
-        if experiment == 1:
-            run_evaluation(exp_settings)
-        else:
+        classes = int(args['<classes>'])
+
+        if (experiment < 1) or (experiment > 2):
             print(f'Experiment number not valid: {experiment}')
+            sys.exit(1)
+
+        if (classes < 1) or (classes > constants.training_n_labels):
+            print(f'Invalid classes number: {classes}')
+            sys.exit(1)
+
+        if (experiment == 2) and (classes % 2 != 0):
+            print(f'Invalid classes number: {classes}, must be an even number')
+            sys.exit(1)
+
+        constants.set_n_labels(classes)
+        exp_settings.experiment_number = experiment
+        exp_settings.num_classes = classes
+        print(f'Running experiment {experiment} with {classes} classes.')
+
+        # Set experiment-specific run path
+        exp_run_path = f'exp_{experiment}_classes_{classes}'
+        exp_run_full_path = os.path.join(constants.run_path, exp_run_path)
+        exp_settings.experiment_run_path = exp_run_path
+        constants.create_directory(exp_run_full_path)
+        print(f'Saving results in {exp_settings.experiment_run_path}')
+
+        run_evaluation(exp_settings)
     elif args['-r']:
         generate_memories(exp_settings)
     elif args['-d']:
