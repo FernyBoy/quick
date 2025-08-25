@@ -66,7 +66,7 @@ def get_encoder():
     dropout += 0.9
     output = conv_block(output, 3, filters, dropout)
     output = Flatten()(output)
-    output = LayerNormalization(name = 'encoded')(output)
+    # output = LayerNormalization(name = 'encoded')(output)
     return input_data, output
 
 def get_decoder():

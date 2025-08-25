@@ -230,10 +230,10 @@ def plot_features_graph(domain, means, stdevs, es):
         plt.savefig(constants.picture_filename(filename, es), dpi=600)
 
 
-def plot_conf_matrix(matrix, tags, prefix, es):
+def plot_conf_matrix(matrix, xtags, ytags, prefix, es):
     plt.clf()
     plt.figure(figsize=(6.4, 4.8))
-    seaborn.heatmap(matrix, xticklabels=tags, yticklabels=tags,
+    seaborn.heatmap(matrix, xticklabels=xtags, yticklabels=ytags,
                     vmin=0.0, vmax=1.0, annot=False, cmap='Blues')
     plt.xlabel(_('Prediction'))
     plt.ylabel(_('Label'))
@@ -782,7 +782,7 @@ def save_history(history, prefix, es):
 
 def save_conf_matrix(matrix, prefix, es):
     name = prefix + constants.matrix_suffix
-    plot_conf_matrix(matrix, range(constants.n_labels), name, es)
+    plot_conf_matrix(matrix, range(constants.traning_n_labels), range(constants.n_labels), name, es)
     filename = constants.data_filename(name, es)
     np.save(filename, matrix)
 
