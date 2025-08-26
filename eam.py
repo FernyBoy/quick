@@ -842,9 +842,12 @@ def test_memory_fills(domain, mem_sizes, es):
         main_avrge_recalls = np.mean(total_recalls, axis=0)
         main_stdev_recalls = np.std(total_recalls, axis=0)
 
+        suffix = constants.numeric_suffix(
+            'exp', es.experiment_number
+        ) + constants.numeric_suffix('sze', mem_size)
         np.savetxt(
             constants.csv_filename(
-                'main_average_precision' + constants.numeric_suffix('sze', mem_size),
+                'main_average_precision' + suffix,
                 es,
                 None,
                 es.experiment_run_path,
@@ -854,7 +857,7 @@ def test_memory_fills(domain, mem_sizes, es):
         )
         np.savetxt(
             constants.csv_filename(
-                'main_average_recall' + constants.numeric_suffix('sze', mem_size),
+                'main_average_recall' + suffix,
                 es,
                 None,
                 es.experiment_run_path,
@@ -864,7 +867,7 @@ def test_memory_fills(domain, mem_sizes, es):
         )
         np.savetxt(
             constants.csv_filename(
-                'main_average_entropy' + constants.numeric_suffix('sze', mem_size),
+                'main_average_entropy' + suffix,
                 es,
                 None,
                 es.experiment_run_path,
@@ -874,7 +877,7 @@ def test_memory_fills(domain, mem_sizes, es):
         )
         np.savetxt(
             constants.csv_filename(
-                'main_stdev_precision' + constants.numeric_suffix('sze', mem_size),
+                'main_stdev_precision' + suffix,
                 es,
                 None,
                 es.experiment_run_path,
@@ -884,7 +887,7 @@ def test_memory_fills(domain, mem_sizes, es):
         )
         np.savetxt(
             constants.csv_filename(
-                'main_stdev_recall' + constants.numeric_suffix('sze', mem_size),
+                'main_stdev_recall' + suffix,
                 es,
                 None,
                 es.experiment_run_path,
@@ -894,7 +897,7 @@ def test_memory_fills(domain, mem_sizes, es):
         )
         np.savetxt(
             constants.csv_filename(
-                'main_stdev_entropy' + constants.numeric_suffix('sze', mem_size),
+                'main_stdev_entropy' + suffix,
                 es,
                 None,
                 es.experiment_run_path,
@@ -910,7 +913,7 @@ def test_memory_fills(domain, mem_sizes, es):
             main_stdev_precisions * 100,
             main_stdev_recalls * 100,
             es,
-            'recall' + constants.numeric_suffix('sze', mem_size),
+            'recall' + suffix,
             xlabels=constants.memory_fills,
             xtitle=_('Percentage of memory corpus'),
         )
@@ -1304,6 +1307,8 @@ if __name__ == '__main__':
     if args['--num-classes']:
         num_classes = int(args['--num-classes'])
         assert 0 < num_classes
+        constants.set_n_labels(num_classes)
+
     # Processing memory size (columns)
     if args['--domain']:
         constants.domain = int(args['--domain'])
@@ -1319,6 +1324,7 @@ if __name__ == '__main__':
     print(f'Working directory: {constants.run_path}')
     print(f'Experimental settings: {exp_settings}')
     print(f'Memory size (columns): {constants.domain}')
+    print(f'Number of classes: {num_classes}')
 
     # PROCESSING OF MAIN OPTIONS.
 
@@ -1336,16 +1342,8 @@ if __name__ == '__main__':
             print(f'Invalid classes number: {num_classes}, must be an even number')
             sys.exit(1)
 
-        constants.set_n_labels(num_classes)
         exp_settings.experiment_number = experiment
         print(f'Running experiment {experiment} with {num_classes} classes.')
-
-        # Set experiment-specific run path
-        exp_run_path = f'exp_{experiment}_classes_{num_classes}'
-        exp_run_full_path = os.path.join(constants.run_path, exp_run_path)
-        exp_settings.experiment_run_path = exp_run_path
-        constants.create_directory(exp_run_full_path)
-        print(f'Saving results in {exp_settings.experiment_run_path}')
         run_evaluation(exp_settings)
     elif args['-r']:
         generate_memories(exp_settings)
