@@ -15,9 +15,9 @@
 
 import csv
 import os
+
 # os.environ['CUDA_VISIBLE_DEVICES']='0'
 import re
-from signal import Sigmasks
 import sys
 import numpy as np
 
@@ -48,8 +48,8 @@ weights_noised_prefix = 'weights-noised'
 classification_prefix = 'classification'
 classification_noised_prefix = 'classif-noised'
 stats_prefix = 'model_stats'
-learn_params_prefix ='learn_params'
-memory_parameters_prefix='mem_params'
+learn_params_prefix = 'learn_params'
+memory_parameters_prefix = 'mem_params'
 chosen_prefix = 'chosen'
 
 balanced_data = 'balanced'
@@ -80,8 +80,13 @@ agreed_suffix = '-agr'
 original_suffix = '-ori'
 amsystem_suffix = '-ams'
 nnetwork_suffix = '-rnn'
-learning_suffixes = [[original_suffix], [agreed_suffix], [amsystem_suffix],
-    [nnetwork_suffix], [original_suffix, amsystem_suffix]]
+learning_suffixes = [
+    [original_suffix],
+    [agreed_suffix],
+    [amsystem_suffix],
+    [nnetwork_suffix],
+    [original_suffix, amsystem_suffix],
+]
 
 # Number of columns in memory
 domain = 256
@@ -104,28 +109,43 @@ am_filling_percent = 0.20
 am_testing_percent = 0.10
 noise_percent = 50
 
-# The dataset is large in the number of classes, and we want to use a variable number of
-# such classes. So we have two variables to control the number of classes:
-# training_n_labels and n_labels.
-#
-# The first one is the number of classes used for training the neural networks. It must be
-# the larger one, and it is also used to set the number of classes in the preprocessed dataset.
-training_n_labels = 8
-
-# The second one is the number of classes used for the memory system. It can be smaller than
-# training_n_labels, and it must be a pair number, because in the negation experiment only 
+# The number of classes used for training the neural networks, and for testing
+# the memory system. It must be a pair number, because in the negation experiment only
 # half of the classes are stored in the memory.
 n_labels = 8
 all_n_labels = list(range(n_labels))
+
 
 def set_n_labels(num_classes):
     global n_labels, all_n_labels
     n_labels = num_classes
     all_n_labels = list(range(n_labels))
 
-label_formats = ['r:v', 'y--d', 'g-.4', 'y-.3', 'k-.8', 'y--^',
-    'c-..', 'm:*', 'c-1', 'b-p', 'm-.D', 'c:D', 'r--s', 'g:d',
-    'm:+', 'y-._', 'm:_', 'y--h', 'g--*', 'm:_', 'g-_', 'm:d']
+
+label_formats = [
+    'r:v',
+    'y--d',
+    'g-.4',
+    'y-.3',
+    'k-.8',
+    'y--^',
+    'c-..',
+    'm:*',
+    'c-1',
+    'b-p',
+    'm-.D',
+    'c:D',
+    'r--s',
+    'g:d',
+    'm:+',
+    'y-._',
+    'm:_',
+    'y--h',
+    'g--*',
+    'm:_',
+    'g-_',
+    'm:d',
+]
 
 precision_idx = 0
 recall_idx = 1
@@ -145,20 +165,27 @@ n_best_memory_sizes = 3
 n_samples = 10
 learned_data_groups = 6
 
+use_percentiles = True
+minimum_percentile = 0.5
+maximum_percentile = 99.5
+
+
 class ExperimentSettings:
-    def __init__(self, params = None):
+    def __init__(self, params=None):
         if params is None:
-            print('Memory parameters not provided, ' 
-                + 'so defaults are used for all memories.')
+            print(
+                'Memory parameters not provided, '
+                + 'so defaults are used for all memories.'
+            )
             self.mem_params = params_defaults
         else:
             # If not None, it must be a one dimensional array.
-            assert(isinstance(params,np.ndarray))
-            assert(params.ndim == 1)
+            assert isinstance(params, np.ndarray)
+            assert params.ndim == 1
             # The dimension must have four elements
             # iota, kappa, xi, sigma
             shape = params.shape
-            assert(shape[0] == 4)
+            assert shape[0] == 4
             self.mem_params = params
         self.experiment_number = None
         self.num_classes = None
@@ -175,13 +202,16 @@ class ExperimentSettings:
         s += '}'
         return s
 
+
 def print_warning(*s):
-    print('WARNING:', *s, file = sys.stderr)
+    print('WARNING:', *s, file=sys.stderr)
+
 
 def print_error(*s):
-    print('ERROR:', *s, file = sys.stderr)
+    print('ERROR:', *s, file=sys.stderr)
 
-def print_counter(n, every, step = 1, symbol = '.', prefix = ''):
+
+def print_counter(n, every, step=1, symbol='.', prefix=''):
     if n == 0:
         return
     e = n % every
@@ -190,46 +220,51 @@ def print_counter(n, every, step = 1, symbol = '.', prefix = ''):
         return
     counter = symbol
     if e == 0:
-        counter =  ' ' + prefix + str(n) + ' '
-    print(counter, end = '', flush=True)
+        counter = ' ' + prefix + str(n) + ' '
+    print(counter, end='', flush=True)
+
 
 def int_suffix(n, prefix=None):
     prefix = '' if prefix is None else '-' + prefix + '_'
     return prefix + str(n).zfill(3)
 
+
 def float_suffix(x, prefix=None):
     prefix = '' if prefix is None else '-' + prefix + '_'
     return prefix + f'{x:.2f}'
 
+
 def extended_suffix(extended):
     return '-ext' if extended else ''
+
 
 def numeric_suffix(prefix, value):
     return '-' + prefix + '_' + str(value).zfill(3)
 
+
 def fold_suffix(fold):
     return '' if fold is None else int_suffix(fold, 'fld')
+
 
 def learned_suffix(learned):
     return int_suffix(learned, 'lrn')
 
+
 def stage_suffix(stage):
     return int_suffix(stage, 'stg')
+
 
 def msize_suffix(msize):
     return int_suffix(msize, 'msz')
 
+
 def sigma_suffix(sigma):
     return float_suffix(sigma, 'sgm')
 
-def learned_suffix(learned):
-    return numeric_suffix('lrn', learned)
-
-def stage_suffix(stage):
-    return numeric_suffix('stg', stage)
 
 def dream_depth_suffix(cycle):
     return numeric_suffix('dph', cycle)
+
 
 def get_name_w_suffix(prefix):
     suffix = ''
@@ -242,58 +277,75 @@ def get_full_name(prefix, es):
     name = get_name_w_suffix(prefix)
     return name
 
+
 # Currently, names include nothing about experiment settings.
 def model_name(es):
     return model_prefix
 
+
 def stats_model_name(es):
     return stats_prefix
+
 
 def data_name(es):
     return data_prefix
 
+
 def features_name(es):
     return features_prefix
+
 
 def labels_name(es):
     return labels_prefix
 
+
 def memories_name(es):
     return memories_prefix
+
 
 def noised_memories_name(es):
     return noised_prefix
 
+
 def recognition_name(es):
     return recognition_prefix
+
 
 def noised_recog_name(es):
     return recog_noised_prefix
 
+
 def weights_name(es):
     return weights_prefix
+
 
 def noised_weights_name(es):
     return weights_noised_prefix
 
+
 def classification_name(es):
     return classification_prefix
+
 
 def noised_classification_name(es):
     return classification_noised_prefix
 
+
 def learn_params_name(es):
     return learn_params_prefix
+
 
 def mem_params_name(es):
     return memory_parameters_prefix
 
+
 def dirname(path):
-    match = re.search('[^/]*$', path) 
+    match = re.search('[^/]*$', path)
     if match is None:
         return path
     tuple = os.path.splitext(match.group(0))
     return os.path.dirname(path) if tuple[1] else path
+
 
 def create_directory(path):
     try:
@@ -301,107 +353,151 @@ def create_directory(path):
         print(f'Directory {path} created.')
     except FileExistsError:
         print(f'Directory {path} already exists.')
-    
 
-def filename(name_prefix, es = None, fold = None, extension = '', sub_dir = None):
-    """ Returns a file name in run_path directory with a given extension and an index
-    """
+
+def filename(name_prefix, es=None, fold=None, extension='', sub_dir=None):
+    """Returns a file name in run_path directory with a given extension and an index"""
     # Create target directory & all intermediate directories if don't exists
     try:
         os.makedirs(run_path)
-        print("Directory " , run_path ,  " created ")
+        print('Directory ', run_path, ' created ')
     except FileExistsError:
         pass
     if sub_dir:
-        return run_path + '/' + sub_dir + '/' + get_full_name(name_prefix,es) \
-            + fold_suffix(fold) + extension
+        return (
+            run_path
+            + '/'
+            + sub_dir
+            + '/'
+            + get_full_name(name_prefix, es)
+            + fold_suffix(fold)
+            + extension
+        )
     else:
-        return run_path + '/' + get_full_name(name_prefix,es) \
-            + fold_suffix(fold) + extension
+        return (
+            run_path
+            + '/'
+            + get_full_name(name_prefix, es)
+            + fold_suffix(fold)
+            + extension
+        )
 
 
-def csv_filename(name_prefix, es = None, fold = None, sub_dir = None):
+def csv_filename(name_prefix, es=None, fold=None, sub_dir=None):
     return filename(name_prefix, es, fold, '.csv', sub_dir)
 
-def data_filename(name_prefix, es = None, fold = None, sub_dir = None):
+
+def data_filename(name_prefix, es=None, fold=None, sub_dir=None):
     return filename(name_prefix, es, fold, '.npy', sub_dir)
+
 
 def input_data_filename(name_prefix, es=None, fold=None):
     """Returns a file name for an INPUT npy file, always in the main run_path."""
-    return os.path.join(run_path, get_full_name(name_prefix, es) + fold_suffix(fold) + '.npy')
+    return os.path.join(
+        run_path, get_full_name(name_prefix, es) + fold_suffix(fold) + '.npy'
+    )
 
 
 def json_filename(name_prefix, es):
     return filename(name_prefix, es, extension='.json')
 
-def pickle_filename(name_prefix, es = None, fold = None):
+
+def pickle_filename(name_prefix, es=None, fold=None):
     return filename(name_prefix, es, fold, '.pkl')
 
-def picture_filename(name_prefix, es, fold = None, sub_dir = None):
+
+def picture_filename(name_prefix, es, fold=None, sub_dir=None):
     return filename(name_prefix, es, fold, extension='.svg', sub_dir=sub_dir)
 
-def image_filename(prefix, idx, label, suffix = '', es = None, fold = None):
-    name_prefix = image_path + '/' + prefix + '/' + \
-        str(label).zfill(3) + '_' + str(idx).zfill(5)  + suffix
+
+def image_filename(prefix, idx, label, suffix='', es=None, fold=None):
+    name_prefix = (
+        image_path
+        + '/'
+        + prefix
+        + '/'
+        + str(label).zfill(3)
+        + '_'
+        + str(idx).zfill(5)
+        + suffix
+    )
     return filename(name_prefix, es, fold, extension='.png')
+
 
 def learned_data_filename(suffix, es, fold):
     prefix = learning_data_learned + suffix + data_suffix
     return data_filename(prefix, es, fold)
 
+
 def learned_labels_filename(suffix, es, fold):
     prefix = learning_data_learned + suffix + labels_suffix
     return data_filename(prefix, es, fold)
 
+
 def seed_data_filename():
     return data_filename(learning_data_seed + data_suffix)
 
+
 def seed_labels_filename():
     return data_filename(learning_data_seed + labels_suffix)
+
 
 def model_filename(name_prefix, es, fold):
     # This function will always point to the main runs directory
     return os.path.join(run_path, get_full_name(name_prefix, es) + fold_suffix(fold))
 
+
 def encoder_filename(name_prefix, es, fold):
-    return model_filename(name_prefix + encoder_suffix, es, fold) + ".keras"
+    return model_filename(name_prefix + encoder_suffix, es, fold) + '.keras'
+
 
 def classifier_filename(name_prefix, es, fold):
-    return model_filename(name_prefix + classifier_suffix, es, fold) + ".keras"
+    return model_filename(name_prefix + classifier_suffix, es, fold) + '.keras'
+
 
 def decoder_filename(name_prefix, es, fold):
-    return model_filename(name_prefix + decoder_suffix, es, fold) + ".keras"
+    return model_filename(name_prefix + decoder_suffix, es, fold) + '.keras'
+
 
 def memory_confrix_filename(fill, es, fold):
     prefix = mem_conf_prefix + int_suffix(fill, 'fll')
     return data_filename(prefix, es, fold)
 
+
 def recog_filename(name_prefix, es, fold):
     return csv_filename(name_prefix, es, fold)
+
 
 def testing_image_filename(path, idx, label, es, fold):
     return image_filename(path, idx, label, original_suffix, es, fold)
 
+
 def prod_testing_image_filename(dir, idx, label, es, fold):
     return image_filename(dir, idx, label, testing_suffix, es, fold)
+
 
 def noised_image_filename(dir, idx, label, es, fold):
     return image_filename(dir, idx, label, noised_suffix, es, fold)
 
+
 def prod_noised_image_filename(dir, idx, label, es, fold):
     return image_filename(dir, idx, label, prod_noised_suffix, es, fold)
+
 
 def memory_image_filename(dir, idx, label, es, fold):
     return image_filename(dir, idx, label, memory_suffix, es, fold)
 
+
 def mean_idx(m):
     return m
 
+
 def std_idx(m):
-    return m+1
+    return m + 1
+
 
 def padding_cropping(data, n_frames):
-    frames, _  = data.shape
+    frames, _ = data.shape
     df = frames - n_frames
     if df < 0:
         return []
@@ -409,9 +505,10 @@ def padding_cropping(data, n_frames):
         return [data]
     else:
         features = []
-        for i in range(df+1):
-            features.append(data[i:i+n_frames,:])
+        for i in range(df + 1):
+            features.append(data[i : i + n_frames, :])
         return features
+
 
 def get_data_in_range(data, i, j):
     if j > i:
@@ -424,7 +521,8 @@ def get_data_in_range(data, i, j):
         elif len(pos) == 0:
             return pre
         else:
-            return np.concatenate((pre,pos), axis=0)
+            return np.concatenate((pre, pos), axis=0)
+
 
 def print_csv(data):
     writer = csv.writer(sys.stdout)
