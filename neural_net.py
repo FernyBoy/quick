@@ -84,7 +84,7 @@ def get_decoder():
         )(output)
         output = SpatialDropout2D(dropout)(trans)
         dropout /= 2.0
-        filters = filters // 4
+        filters = filters // (constants.domain // 32) 
         output = BatchNormalization()(output)
     output = Conv2DTranspose(
         filters=filters, kernel_size=3, strides=1, activation='sigmoid', padding='same'
