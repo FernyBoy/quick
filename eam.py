@@ -437,8 +437,9 @@ def get_ams_results(
         p[constants.kappa_idx],
     )
 
+    known_threshold = constants.n_labels
     if es.experiment_number == 2:
-        known_threshold = constants.n_labels // 2
+        known_threshold //= 2
         print('--------------------------------------------')
         print(f'Adjusted known_threshold = {known_threshold}')
         print('--------------------------------------------')
