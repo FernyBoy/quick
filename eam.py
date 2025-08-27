@@ -943,7 +943,7 @@ def save_history(history, prefix, es):
 def save_conf_matrix(matrix, prefix, es):
     name = prefix + constants.matrix_suffix
     plot_conf_matrix(
-        matrix, range(constants.traning_n_labels), range(constants.n_labels), name, es
+        matrix, range(constants.n_labels), range(constants.n_labels), name, es
     )
     filename = constants.data_filename(name, es)
     np.save(filename, matrix)
