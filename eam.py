@@ -753,26 +753,25 @@ def test_filling_per_fold(mem_size, domain, es, fold):
     filling_labels = filling_labels[filling_mask]
 
     qd = qudeq.QuDeq(filling_features, percentiles=constants.use_percentiles)
-    filling_features = qd.quantize(filling_features, mem_size)
-    testing_features = qd.quantize(testing_features, mem_size)
-
-    known_threshold = es.num_classes
+    known_threshold = constants.n_labels
     print('--------------------------------------------')
     print(f'known_threshold = {known_threshold}')
     print('--------------------------------------------')
 
     if es.experiment_number == 2:
-        known_threshold = es.num_classes // 2
+        known_threshold //= 2
         print('--------------------------------------------')
         print(f'Adjusted known_threshold = {known_threshold}')
         print('--------------------------------------------')
 
-    known_label_mask = filling_labels < known_threshold
-    filling_features = filling_features[known_label_mask]
+        known_label_mask = filling_labels < known_threshold
+        filling_features = filling_features[known_label_mask]
     print('--------------------------------------------')
     print(f'filling labels shape = {filling_labels.shape}')
     print(f'filling features shape = {filling_features.shape}')
     print('--------------------------------------------')
+    filling_features = qd.quantize(filling_features, mem_size)
+    testing_features = qd.quantize(testing_features, mem_size)
 
     total = len(filling_labels)
     percents = np.array(constants.memory_fills)
