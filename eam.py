@@ -387,15 +387,12 @@ def split_every(n, iterable):
         piece = list(islice(i, n))
 
 
-def optimum_indexes(precisions, recalls):
-    f1s = []
-    i = 0
-    for p, r in zip(precisions, recalls):
-        f1 = 0 if (r + p) == 0 else 2 * (r * p) / (r + p)
-        f1s.append((f1, i))
-        i += 1
-    f1s.sort(reverse=True, key=lambda tuple: tuple[0])
-    return [t[1] for t in f1s[: constants.n_best_memory_sizes]]
+def optimum_indexes(precisions, accuracies):
+    accs = []
+    for idx, acc in enumerate(accuracies):
+        accs.append((acc, idx))
+    accs.sort(reverse=True, key=lambda tuple: tuple[0])
+    return [t[1] for t in accs[: constants.n_best_memory_sizes]]
 
 
 def ams_size_results(
@@ -982,84 +979,74 @@ def load_learned_params(es):
 
 def remember(msize, mfill, es):
     msize_suffix = constants.msize_suffix(msize)
-    for sigma in constants.sigma_values:
-        print(f'Running remembering for sigma = {sigma:.2f}')
-        sigma_suffix = constants.sigma_suffix(sigma)
-        suffix = msize_suffix + sigma_suffix
-        memories_prefix = constants.memories_name(es) + suffix
-        recognition_prefix = constants.recognition_name(es) + suffix
-        weights_prefix = constants.weights_name(es) + suffix
-        classif_prefix = constants.classification_name(es) + suffix
-        noised_memories_prefix = constants.noised_memories_name(es) + suffix
-        noised_recog_prefix = constants.noised_recog_name(es) + suffix
-        noised_weights_prefix = constants.noised_weights_name(es) + suffix
-        noised_classif_prefix = constants.noised_classification_name(es) + suffix
-        prefixes_list = [
-            [memories_prefix, recognition_prefix, weights_prefix, classif_prefix],
-            [
-                noised_memories_prefix,
-                noised_recog_prefix,
-                noised_weights_prefix,
-                noised_classif_prefix,
-            ],
-        ]
+    print(f'Running remembering for sigma = {es.mem_params[constants.sigma_idx]}')
+    suffix = msize_suffix
+    memories_prefix = constants.memories_name(es) + suffix
+    recognition_prefix = constants.recognition_name(es) + suffix
+    weights_prefix = constants.weights_name(es) + suffix
+    classif_prefix = constants.classification_name(es) + suffix
+    noised_memories_prefix = constants.noised_memories_name(es) + suffix
+    noised_recog_prefix = constants.noised_recog_name(es) + suffix
+    noised_weights_prefix = constants.noised_weights_name(es) + suffix
+    noised_classif_prefix = constants.noised_classification_name(es) + suffix
+    prefixes_list = [
+        [memories_prefix, recognition_prefix, weights_prefix, classif_prefix],
+        [
+            noised_memories_prefix,
+            noised_recog_prefix,
+            noised_weights_prefix,
+            noised_classif_prefix,
+        ],
+    ]
 
-        for fold in range(constants.n_folds):
-            print(f'Running remembering for fold: {fold}')
-            suffix = constants.filling_suffix
-            filling_features_filename = constants.features_name(es) + suffix
-            filling_features_filename = constants.input_data_filename(
-                filling_features_filename, es, fold
-            )
+    for fold in range(constants.n_folds):
+        print(f'Running remembering for fold: {fold}')
+        suffix = constants.filling_suffix
+        filling_features_filename = constants.features_name(es) + suffix
+        filling_features_filename = constants.input_data_filename(
+            filling_features_filename, es, fold
+        )
 
-            suffix = constants.testing_suffix
-            testing_features_filename = constants.features_name(es) + suffix
-            testing_features_filename = constants.input_data_filename(
-                testing_features_filename, es, fold
-            )
+        suffix = constants.testing_suffix
+        testing_features_filename = constants.features_name(es) + suffix
+        testing_features_filename = constants.input_data_filename(
+            testing_features_filename, es, fold
+        )
 
-            suffix = constants.noised_suffix
-            noised_features_filename = constants.features_name(es) + suffix
-            noised_features_filename = constants.input_data_filename(
-                noised_features_filename, es, fold
-            )
+        suffix = constants.noised_suffix
+        noised_features_filename = constants.features_name(es) + suffix
+        noised_features_filename = constants.input_data_filename(
+            noised_features_filename, es, fold
+        )
 
-            filling_features = np.load(filling_features_filename)
-            testing_features = np.load(testing_features_filename)
-            noised_features = np.load(noised_features_filename)
-            max_value = maximum((filling_features, testing_features, noised_features))
-            min_value = minimum((filling_features, testing_features, noised_features))
-            filling_rounded = msize_features(
-                filling_features, msize, min_value, max_value
-            )
-            testing_rounded = msize_features(
-                testing_features, msize, min_value, max_value
-            )
-            noised_rounded = msize_features(
-                noised_features, msize, min_value, max_value
-            )
+        filling_features = np.load(filling_features_filename)
+        testing_features = np.load(testing_features_filename)
+        noised_features = np.load(noised_features_filename)
+        max_value = maximum((filling_features, testing_features, noised_features))
+        min_value = minimum((filling_features, testing_features, noised_features))
+        filling_rounded = msize_features(filling_features, msize, min_value, max_value)
+        testing_rounded = msize_features(testing_features, msize, min_value, max_value)
+        noised_rounded = msize_features(noised_features, msize, min_value, max_value)
 
-            # Create the memory and fill it
-            p = es.mem_params
-            eam = AssociativeMemory(
-                constants.domain,
-                msize,
-                p[constants.xi_idx],
-                sigma,
-                p[constants.iota_idx],
-                p[constants.kappa_idx],
-            )
-            end = round(len(filling_features) * mfill / 100.0)
-            for features in filling_rounded[:end]:
-                eam.register(features)
-            print(f'Memory of size {msize} filled with {end} elements for fold {fold}')
+        # Create the memory and fill it
+        p = es.mem_params
+        eam = AssociativeMemory(
+            constants.domain,
+            msize,
+            p[constants.xi_idx],
+            p[constants.sigma_idx],
+            p[constants.iota_idx],
+            p[constants.kappa_idx],
+        )
+        end = round(len(filling_features) * mfill / 100.0)
+        for features in filling_rounded[:end]:
+            eam.register(features)
+        print(f'Memory of size {msize} filled with {end} elements for fold {fold}')
 
-            for features, prefixes in zip(
-                [testing_rounded, noised_rounded], prefixes_list
-            ):
-                remember_with_sigma(
-                    eam, features, prefixes, msize, min_value, max_value, es, fold
-                )
+        for features, prefixes in zip([testing_rounded, noised_rounded], prefixes_list):
+            remember_with_sigma(
+                eam, features, prefixes, msize, min_value, max_value, es, fold
+            )
     print('Remembering done!')
 
 
@@ -1160,39 +1147,34 @@ def decode_memories(msize, es):
     msize_suffix = constants.msize_suffix(msize)
     model_prefix = constants.model_name(es)
     testing_labels_prefix = constants.labels_prefix + constants.testing_suffix
+    print(f'Running remembering for sigma = {es.mem_params[constants.sigma_idx]:.2f}')
+    suffix = msize_suffix
+    memories_prefix = constants.memories_name(es) + suffix
+    noised_prefix = constants.noised_memories_name(es) + suffix
+    for fold in range(constants.n_folds):
+        # Load test features and labels
+        memories_features_filename = constants.data_filename(memories_prefix, es, fold)
+        noised_features_filename = constants.data_filename(noised_prefix, es, fold)
+        testing_labels_filename = constants.data_filename(
+            testing_labels_prefix, es, fold
+        )
+        memories_features = np.load(memories_features_filename)
+        noised_features = np.load(noised_features_filename)
+        testing_labels = np.load(testing_labels_filename)
+        # Loads the decoder.
+        model_filename = constants.decoder_filename(model_prefix, es, fold)
+        model = tf.keras.models.load_model(model_filename)
+        model.summary()
 
-    for sigma in constants.sigma_values:
-        print(f'Running remembering for sigma = {sigma:.2f}')
-        sigma_suffix = constants.sigma_suffix(sigma)
-        suffix = msize_suffix + sigma_suffix
-        memories_prefix = constants.memories_name(es) + suffix
-        noised_prefix = constants.noised_memories_name(es) + suffix
-        for fold in range(constants.n_folds):
-            # Load test features and labels
-            memories_features_filename = constants.data_filename(
-                memories_prefix, es, fold
-            )
-            noised_features_filename = constants.data_filename(noised_prefix, es, fold)
-            testing_labels_filename = constants.data_filename(
-                testing_labels_prefix, es, fold
-            )
-            memories_features = np.load(memories_features_filename)
-            noised_features = np.load(noised_features_filename)
-            testing_labels = np.load(testing_labels_filename)
-            # Loads the decoder.
-            model_filename = constants.decoder_filename(model_prefix, es, fold)
-            model = tf.keras.models.load_model(model_filename)
-            model.summary()
-
-            memories_images = model.predict(memories_features)
-            noised_images = model.predict(noised_features)
-            n = len(testing_labels)
-            memories_path = constants.memories_path + suffix
-            for i, memory, noised, label in zip(
-                range(n), memories_images, noised_images, testing_labels
-            ):
-                store_memory(memory, memories_path, i, label, es, fold)
-                store_noised_memory(noised, memories_path, i, label, es, fold)
+        memories_images = model.predict(memories_features)
+        noised_images = model.predict(noised_features)
+        n = len(testing_labels)
+        memories_path = constants.memories_path + suffix
+        for i, memory, noised, label in zip(
+            range(n), memories_images, noised_images, testing_labels
+        ):
+            store_memory(memory, memories_path, i, label, es, fold)
+            store_noised_memory(noised, memories_path, i, label, es, fold)
 
 
 def store_original_and_test(
@@ -1264,15 +1246,6 @@ def produce_features_from_data(es):
     neural_net.obtain_features(
         model_prefix, features_prefix, labels_prefix, data_prefix, es
     )
-
-
-def create_and_train_autoencoders(es):
-    model_prefix = constants.model_name(es)
-    stats_prefix = model_prefix + constants.decoder_suffix
-    features_prefix = constants.features_name(es)
-    data_prefix = constants.data_name(es)
-    history = neural_net.train_decoder(model_prefix, features_prefix, data_prefix, es)
-    save_history(history, stats_prefix, es)
 
 
 def run_evaluation(es):
