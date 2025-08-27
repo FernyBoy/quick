@@ -24,7 +24,7 @@ rows = 28
 
 
 def get_training(fold, categorical=False):
-    return _get_segment(_TRAINING_SEGMENT, fold)
+    return _get_segment(_TRAINING_SEGMENT, fold, categorical)
 
 
 def get_filling(fold):
