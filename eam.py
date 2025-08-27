@@ -164,25 +164,26 @@ def plot_size_graph(response_size, size_stdev, es):
 
 
 def plot_behs_graph(
-    no_response,
-    correct_no_response,
     incorrect_no_response,
-    no_correct,
+    incorrect,
     correct,
     es,
+    correct_no_response=None,
     xtitle=None,
     ytitle=None,
 ):
-    for i in range(len(no_response)):
+    if correct_no_response is None:
+        correct_no_response = np.zeros_like(incorrect_no_response)
+    for i in range(len(incorrect_no_response)):
         total = (
             incorrect_no_response[i]
             + correct_no_response[i]
-            + no_correct[i]
+            + incorrect[i]
             + correct[i]
         ) / 100.0
         correct_no_response[i] /= total
         incorrect_no_response
-        no_correct[i] /= total
+        incorrect[i] /= total
         correct[i] /= total
 
     plt.clf()
@@ -200,8 +201,8 @@ def plot_behs_graph(
 
     plt.bar(x, correct, width, label=_('Correct response'))
     cumm = np.array(correct)
-    plt.bar(x, no_correct, width, bottom=cumm, label=_('Incorrect response'))
-    cumm += np.array(no_correct)
+    plt.bar(x, incorrect, width, bottom=cumm, label=_('Incorrect response'))
+    cumm += np.array(incorrect)
     plt.bar(x, correct_no_response, width, bottom=cumm, label=_('Correct no response'))
     cumm += np.array(correct_no_response)
     plt.bar(
@@ -332,42 +333,40 @@ def rsize_recall(recall, msize, min_value, max_value):
 def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold, es):
     data = []
     labels = []
-    confrix = np.zeros((constants.n_labels, constants.n_labels), dtype='int')
+    unknown = constants.n_labels
+    confrix = np.zeros((constants.n_labels, constants.n_labels + 1), dtype='int')
     behaviour = np.zeros(constants.n_behaviours, dtype=np.float64)
-    correct_unknown = 0
-    incorrect_unknown = 0
     for features, label in zip(tef_rounded, tel):
         memory, recognized, _ = eam.recall(features)
         if recognized:
             mem = qd.dequantize(memory, msize)
             data.append(mem)
             labels.append(label)
-        elif label < threshold:
-            incorrect_unknown += 1
         else:
-            correct_unknown += 1
+            confrix[label, unknown] += 1
     data = np.array(data)
     predictions = np.argmax(classifier.predict(data), axis=1)
     for correct, prediction in zip(labels, predictions):
-        # For calculation of per memory precision and recall
         confrix[correct, prediction] += 1
     if es.experiment_number == 1:
-        behaviour[constants.no_response_idx] = incorrect_unknown
+        behaviour[constants.no_response_idx] = np.sum(confrix[:, unknown])
     elif es.experiment_number == 2:
-        behaviour[constants.correct_no_response_idx] = correct_unknown
-        behaviour[constants.incorrect_no_response_idx] = incorrect_unknown
+        behaviour[constants.correct_no_response_idx] = np.sum(
+            confrix[threshold:, unknown]
+        )
+        behaviour[constants.incorrect_no_response_idx] = np.sum(
+            confrix[:threshold, unknown]
+        )
     behaviour[constants.correct_response_idx] = np.sum(
         [confrix[i, i] for i in range(threshold)]
     )
 
-    behaviour[constants.no_correct_response_idx] = (
+    behaviour[constants.incorrect_response_idx] = (
         len(tel)
-        - correct_unknown
-        - incorrect_unknown
+        - np.sum(confrix[:, unknown])
         - behaviour[constants.correct_response_idx]
     )
     print(f'Confusion matrix:\n{confrix}')
-    print(f'Behaviour: {behaviour}')
     return confrix, behaviour
 
 
@@ -399,7 +398,7 @@ def optimum_indexes(precisions, recalls):
     return [t[1] for t in f1s[: constants.n_best_memory_sizes]]
 
 
-def get_ams_results(
+def ams_size_results(
     midx,
     msize,
     domain,
@@ -410,6 +409,7 @@ def get_ams_results(
     classifier,
     es,
 ):
+    """Analyze the results of the AMS experiment for the given memory size."""
     for i in range(5):
         print(' ')
 
@@ -478,23 +478,14 @@ def get_ams_results(
             len(testing_labels)
         )
     elif es.experiment_number == 2:
-        pass
-        # For this experiment we need to split the no_response_idx into
-        # correct_no_response_idx (for classes that should be rejected) and
-        # incorrect_no_response_idx (for classes that should not be rejected).
-        responses = len(testing_labels) - behaviour[constants.incorrect_no_response_idx]
-        if responses > 0:
-            correct = (
-                behaviour[constants.correct_no_response_idx]
-                + behaviour[constants.correct_response_idx]
-            )
-            precision = correct / float(responses)
+        true_positives = behaviour[constants.correct_response_idx]
+        false_positives = behaviour[constants.incorrect_response_idx]
+        true_negatives = behaviour[constants.correct_no_response_idx]
+        if true_positives + false_positives > 0:
+            precision = true_positives / float(true_positives + false_positives)
         else:
             precision = 0.0  # Avoid division by zero
-        accuracy = (
-            behaviour[constants.correct_no_response_idx]
-            + behaviour[constants.correct_response_idx]
-        ) / float(len(testing_labels))
+        accuracy = (true_negatives + true_positives) / float(len(testing_labels))
 
     behaviour[constants.precision_idx] = precision
     behaviour[constants.accuracy_idx] = accuracy
@@ -557,7 +548,7 @@ def test_memory_sizes(domain, es):
         entropies = []
         for midx, msize in enumerate(constants.memory_sizes):
             print(f'Memory size: {msize}')
-            results = get_ams_results(
+            results = ams_size_results(
                 midx,
                 msize,
                 domain,
@@ -615,7 +606,7 @@ def test_memory_sizes(domain, es):
     stdv_correct_no_response = np.std(correct_no_response, axis=0)
     mean_incorrect_no_response = np.mean(incorrect_no_response, axis=0)
     stdv_incorrect_no_response = np.std(incorrect_no_response, axis=0)
-    mean_no_correct_response = np.mean(no_correct_response, axis=0)
+    mean_incorrect_response = np.mean(no_correct_response, axis=0)
     stdv_no_correct_response = np.std(no_correct_response, axis=0)
     mean_correct_response = np.mean(correct_response, axis=0)
     stdv_correct_response = np.std(correct_response, axis=0)
@@ -625,7 +616,7 @@ def test_memory_sizes(domain, es):
         mean_no_response,
         mean_correct_no_response,
         mean_incorrect_no_response,
-        mean_no_correct_response,
+        mean_incorrect_response,
         mean_correct_response,
     ]
     stdv_behaviours = [
@@ -678,12 +669,11 @@ def test_memory_sizes(domain, es):
         es,
     )
     plot_behs_graph(
-        mean_no_response,
-        mean_correct_no_response,
         mean_incorrect_no_response,
-        mean_no_correct_response,
+        mean_incorrect_response,
         mean_correct_response,
         es,
+        correct_no_response=mean_correct_no_response,
         xtitle='Memory size (rows)',
     )
     print('Memory size evaluation completed!')
@@ -691,20 +681,47 @@ def test_memory_sizes(domain, es):
 
 
 def test_filling_percent(
-    eam, msize, qd, trf, tef, tel, percent, classifier, threshold, es
+    eam,
+    msize,
+    qd,
+    filling_features,
+    testing_features,
+    testing_labels,
+    percent,
+    classifier,
+    threshold,
+    es,
 ):
     # Registrate filling data.
-    for features in trf:
+    for features in filling_features:
         eam.register(features)
     print(f'Filling of memories done at {percent}%')
     _, behaviour = recognize_by_memory(
-        eam, tef, tel, msize, qd, classifier, threshold, es
+        eam, testing_features, testing_labels, msize, qd, classifier, threshold, es
     )
-    responses = len(tel) - behaviour[constants.no_response_idx]
-    precision = behaviour[constants.correct_response_idx] / float(responses)
-    recall = behaviour[constants.correct_response_idx] / float(len(tel))
+    # If there are no responses, precision is undefined. Let's set it to 0.
+    if es.experiment_number == 1:
+        responses = len(testing_labels) - behaviour[constants.no_response_idx]
+        if responses > 0:
+            precision = behaviour[constants.correct_response_idx] / float(responses)
+        else:
+            precision = 0.0  # Avoid division by zero
+
+        accuracy = behaviour[constants.correct_response_idx] / float(
+            len(testing_labels)
+        )
+    elif es.experiment_number == 2:
+        true_positives = behaviour[constants.correct_response_idx]
+        false_positives = behaviour[constants.incorrect_response_idx]
+        true_negatives = behaviour[constants.correct_no_response_idx]
+        if true_positives + false_positives > 0:
+            precision = true_positives / float(true_positives + false_positives)
+        else:
+            precision = 0.0  # Avoid division by zero
+        accuracy = (true_negatives + true_positives) / float(len(testing_labels))
+
     behaviour[constants.precision_idx] = precision
-    behaviour[constants.recall_idx] = recall
+    behaviour[constants.accuracy_idx] = accuracy
     return behaviour, eam.entropy
 
 
@@ -780,7 +797,7 @@ def test_filling_per_fold(mem_size, domain, es, fold):
 
     fold_entropies = []
     fold_precision = []
-    fold_recall = []
+    fold_accuracy = []
 
     start = 0
     for percent, end in zip(percents, steps):
@@ -804,16 +821,16 @@ def test_filling_per_fold(mem_size, domain, es, fold):
         fold_entropies.append(entropy)
         # Arrays with precision, and recall.
         fold_precision.append(behaviour[constants.precision_idx])
-        fold_recall.append(behaviour[constants.recall_idx])
+        fold_accuracy.append(behaviour[constants.accuracy_idx])
         start = end
     # Use this to plot current state of memories
     # as heatmaps.
     # plot_memories(ams, es, fold)
     fold_entropies = np.array(fold_entropies)
     fold_precision = np.array(fold_precision)
-    fold_recall = np.array(fold_recall)
+    fold_accuracy = np.array(fold_accuracy)
     print(f'Filling test completed for fold {fold}')
-    return fold, fold_entropies, fold_precision, fold_recall
+    return fold, fold_entropies, fold_precision, fold_accuracy
 
 
 def test_memory_fills(domain, mem_sizes, es):
@@ -824,23 +841,23 @@ def test_memory_fills(domain, mem_sizes, es):
         # All entropies, precision, and recall, per size, fold, and fill.
         total_entropies = np.zeros((testing_folds, len(memory_fills)))
         total_precisions = np.zeros((testing_folds, len(memory_fills)))
-        total_recalls = np.zeros((testing_folds, len(memory_fills)))
+        total_accuracies = np.zeros((testing_folds, len(memory_fills)))
         list_results = []
 
         for fold in range(testing_folds):
             results = test_filling_per_fold(mem_size, domain, es, fold)
             list_results.append(results)
-        for fold, entropies, precisions, recalls in list_results:
+        for fold, entropies, precisions, accuracies in list_results:
             total_precisions[fold] = precisions
-            total_recalls[fold] = recalls
+            total_accuracies[fold] = accuracies
             total_entropies[fold] = entropies
 
         main_avrge_entropies = np.mean(total_entropies, axis=0)
         main_stdev_entropies = np.std(total_entropies, axis=0)
         main_avrge_precisions = np.mean(total_precisions, axis=0)
         main_stdev_precisions = np.std(total_precisions, axis=0)
-        main_avrge_recalls = np.mean(total_recalls, axis=0)
-        main_stdev_recalls = np.std(total_recalls, axis=0)
+        main_avrge_accuracies = np.mean(total_accuracies, axis=0)
+        main_stdev_accuracies = np.std(total_accuracies, axis=0)
 
         suffix = constants.numeric_suffix(
             'exp', es.experiment_number
@@ -862,7 +879,7 @@ def test_memory_fills(domain, mem_sizes, es):
                 None,
                 es.experiment_run_path,
             ),
-            main_avrge_recalls,
+            main_avrge_accuracies,
             delimiter=',',
         )
         np.savetxt(
@@ -892,7 +909,7 @@ def test_memory_fills(domain, mem_sizes, es):
                 None,
                 es.experiment_run_path,
             ),
-            main_stdev_recalls,
+            main_stdev_accuracies,
             delimiter=',',
         )
         np.savetxt(
@@ -908,17 +925,17 @@ def test_memory_fills(domain, mem_sizes, es):
 
         plot_pre_graph(
             main_avrge_precisions * 100,
-            main_avrge_recalls * 100,
+            main_avrge_accuracies * 100,
             main_avrge_entropies,
             main_stdev_precisions * 100,
-            main_stdev_recalls * 100,
+            main_stdev_accuracies * 100,
             es,
             'recall' + suffix,
             xlabels=constants.memory_fills,
             xtitle=_('Percentage of memory corpus'),
         )
 
-        bf_idx = optimum_indexes(main_avrge_precisions, main_avrge_recalls)
+        bf_idx = optimum_indexes(main_avrge_precisions, main_avrge_accuracies)
         best_filling_percents.append(constants.memory_fills[bf_idx[0]])
         print(f'Testing fillings for memory size {mem_size} done.')
     return best_filling_percents

@@ -152,10 +152,10 @@ recall_idx = 1
 accuracy_idx = 2
 entropy_idx = 3
 no_response_idx = 4
-no_correct_response_idx = 5
-correct_response_idx = 6
-correct_no_response_idx = 7
+correct_no_response_idx = 5
 incorrect_no_response_idx = no_response_idx
+correct_response_idx = 6
+incorrect_response_idx = 7
 n_behaviours = 8
 
 memory_sizes = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
