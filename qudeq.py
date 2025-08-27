@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
 import numpy as np
 import constants
 
@@ -26,6 +27,11 @@ class QuDeq:
 
     def __init__(self, corpus: np.ndarray, percentiles=False):
         self.minima, self.maxima = self.get_min_max(corpus, percentiles)
+        idx = np.where(self.minima == self.maxima)[0]
+        if len(idx) > 0:
+            print(
+                f'Minima and maxima have the same value in position(s): {idx.tolist()}'
+            )
 
     def get_min_max(self, a: np.ndarray, percentiles: bool):
         """Produces desirable minimum and maximum values for features."""
@@ -63,7 +69,12 @@ class QuDeq:
             return np.array(b)
 
     def _quantize(self, x, min, max, m):
-        return round((m - 1) * (x - min) / (max - min))
+        if max == min:
+            return round((m - 1) / 2)
+        elif math.isnan(x):
+            return max + 1
+        else:
+            return round((m - 1) * (x - min) / (max - min))
 
     def _dequantize(self, i, min, max, m):
         return (max - min) / 2 if m == 1 else (max - min) * i / (m - 1) + min
