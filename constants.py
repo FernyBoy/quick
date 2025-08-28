@@ -26,7 +26,6 @@ data_path = 'data/quick'
 run_path = 'runs'
 idx_digits = 3
 prep_data_fname = 'prep_data.npy'
-pred_noised_data_fname = 'prep_noised_data.npy'
 prep_labels_fname = 'prep_labels.npy'
 
 image_path = 'images'
@@ -38,15 +37,11 @@ data_prefix = 'data'
 labels_prefix = 'labels'
 features_prefix = 'features'
 memories_prefix = 'memories'
-noised_prefix = 'mem_noised'
 mem_conf_prefix = 'mem_confrix'
 model_prefix = 'model'
 recognition_prefix = 'recognition'
-recog_noised_prefix = 'recog_noised'
 weights_prefix = 'weights'
-weights_noised_prefix = 'weights-noised'
 classification_prefix = 'classification'
-classification_noised_prefix = 'classif-noised'
 stats_prefix = 'model_stats'
 learn_params_prefix = 'learn_params'
 memory_parameters_prefix = 'mem_params'
@@ -62,8 +57,6 @@ original_suffix = '-original'
 training_suffix = '-training'
 filling_suffix = '-filling'
 testing_suffix = '-testing'
-noised_suffix = '-noised'
-prod_noised_suffix = '-prod_noised'
 memories_suffix = '-memories'
 
 # Model suffixes.
@@ -107,7 +100,6 @@ sigma_idx = 3
 nn_training_percent = 0.70
 am_filling_percent = 0.20
 am_testing_percent = 0.10
-noise_percent = 50
 
 # The number of classes used for training the neural networks, and for testing
 # the memory system. It must be a pair number, because in the negation experiment only
@@ -300,32 +292,16 @@ def memories_name(es):
     return memories_prefix
 
 
-def noised_memories_name(es):
-    return noised_prefix
-
-
 def recognition_name(es):
     return recognition_prefix
-
-
-def noised_recog_name(es):
-    return recog_noised_prefix
 
 
 def weights_name(es):
     return weights_prefix
 
 
-def noised_weights_name(es):
-    return weights_noised_prefix
-
-
 def classification_name(es):
     return classification_prefix
-
-
-def noised_classification_name(es):
-    return classification_noised_prefix
 
 
 def learn_params_name(es):
@@ -471,14 +447,6 @@ def testing_image_filename(path, idx, label, es, fold):
 
 def prod_testing_image_filename(dir, idx, label, es, fold):
     return image_filename(dir, idx, label, testing_suffix, es, fold)
-
-
-def noised_image_filename(dir, idx, label, es, fold):
-    return image_filename(dir, idx, label, noised_suffix, es, fold)
-
-
-def prod_noised_image_filename(dir, idx, label, es, fold):
-    return image_filename(dir, idx, label, prod_noised_suffix, es, fold)
 
 
 def memory_image_filename(dir, idx, label, es, fold):
