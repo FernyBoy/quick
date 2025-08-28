@@ -31,7 +31,7 @@ from keras.callbacks import Callback
 import constants
 import dataset
 
-batch_size = 32
+batch_size = 300
 epochs = 300
 patience = 7
 truly_training_percentage = 0.80
@@ -100,7 +100,7 @@ def get_decoder():
         )(output)
         output = SpatialDropout2D(dropout)(trans)
         dropout /= 2.0
-        filters = filters // (constants.domain // 32) 
+        filters = filters // (constants.domain // 32)
         output = BatchNormalization()(output)
     output = Conv2DTranspose(
         filters=filters, kernel_size=3, strides=1, activation='sigmoid', padding='same'
