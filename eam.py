@@ -480,7 +480,7 @@ def test_memory_sizes(domain, es):
     no_response = []
     correct_no_response = []
     incorrect_no_response = []
-    no_correct_response = []
+    incorrect_response = []
     correct_response = []
 
     print('Testing the memory')
@@ -558,7 +558,7 @@ def test_memory_sizes(domain, es):
         no_response.append(behaviours[:, constants.no_response_idx])
         correct_no_response.append(behaviours[:, constants.correct_no_response_idx])
         incorrect_no_response.append(behaviours[:, constants.incorrect_no_response_idx])
-        no_correct_response.append(behaviours[:, constants.no_correct_response_idx])
+        incorrect_response.append(behaviours[:, constants.incorrect_response_idx])
         correct_response.append(behaviours[:, constants.correct_response_idx])
 
     # Every row is training fold, and every column is a memory size.
@@ -577,7 +577,7 @@ def test_memory_sizes(domain, es):
     no_response = np.array(no_response)
     correct_no_response = np.array(correct_no_response)
     incorrect_no_response = np.array(incorrect_no_response)
-    no_correct_response = np.array(no_correct_response)
+    incorrect_response = np.array(incorrect_response)
     correct_response = np.array(correct_response)
     mean_no_response = np.mean(no_response, axis=0)
     stdv_no_response = np.std(no_response, axis=0)
@@ -585,8 +585,8 @@ def test_memory_sizes(domain, es):
     stdv_correct_no_response = np.std(correct_no_response, axis=0)
     mean_incorrect_no_response = np.mean(incorrect_no_response, axis=0)
     stdv_incorrect_no_response = np.std(incorrect_no_response, axis=0)
-    mean_incorrect_response = np.mean(no_correct_response, axis=0)
-    stdv_no_correct_response = np.std(no_correct_response, axis=0)
+    mean_incorrect_response = np.mean(incorrect_response, axis=0)
+    stdv_incorrect_response = np.std(incorrect_response, axis=0)
     mean_correct_response = np.mean(correct_response, axis=0)
     stdv_correct_response = np.std(correct_response, axis=0)
     best_memory_idx = optimum_indexes(average_precision, average_accuracy)
@@ -602,7 +602,7 @@ def test_memory_sizes(domain, es):
         stdv_no_response,
         stdv_correct_no_response,
         stdv_incorrect_no_response,
-        stdv_no_correct_response,
+        stdv_incorrect_response,
         stdv_correct_response,
     ]
 
