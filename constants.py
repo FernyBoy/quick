@@ -160,12 +160,8 @@ maximum_percentile = 99.5
 
 
 class ExperimentSettings:
-    def __init__(self, params=None):
+    def __init__(self, *, params=None, iota=None, kappa=None, xi=None, sigma=None):
         if params is None:
-            print(
-                'Memory parameters not provided, '
-                + 'so defaults are used for all memories.'
-            )
             self.mem_params = params_defaults
         else:
             # If not None, it must be a one dimensional array.
@@ -176,20 +172,30 @@ class ExperimentSettings:
             shape = params.shape
             assert shape[0] == 4
             self.mem_params = params
-        self.experiment_number = None
-        self.num_classes = None
-        self.experiment_run_path = None
+        if iota is not None:
+            self.mem_params[iota_idx] = iota
+        if kappa is not None:
+            self.mem_params[kappa_idx] = kappa
+        if xi is not None:
+            self.mem_params[xi_idx] = xi
+        if sigma is not None:
+            self.mem_params[sigma_idx] = sigma
 
-    def __str__(self):
-        s = '{Parameters: ' + str(self.mem_params)
-        if self.experiment_number is not None:
-            s += f', Experiment: {self.experiment_number}'
-        if self.num_classes is not None:
-            s += f', Classes: {self.num_classes}'
-        if self.experiment_run_path is not None:
-            s += f', Run Path: {self.experiment_run_path}'
-        s += '}'
-        return s
+    @property
+    def xi(self):
+        return self.mem_params[xi_idx]
+
+    @property
+    def iota(self):
+        return self.mem_params[iota_idx]
+
+    @property
+    def kappa(self):
+        return self.mem_params[kappa_idx]
+
+    @property
+    def sigma(self):
+        return self.mem_params[sigma_idx]
 
 
 def print_warning(*s):
