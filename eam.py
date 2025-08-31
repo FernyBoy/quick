@@ -407,14 +407,10 @@ def ams_size_results(
     behaviour = np.zeros(constants.n_behaviours, dtype=np.float64)
 
     # Create the memory.
-    p = es.mem_params
     eam = AssociativeMemory(
         domain,
         msize,
-        p[constants.xi_idx],
-        p[constants.sigma_idx],
-        p[constants.iota_idx],
-        p[constants.kappa_idx],
+        es,
     )
 
     known_threshold = constants.n_labels
@@ -708,14 +704,10 @@ def test_filling_percent(
 
 def test_filling_per_fold(mem_size, domain, es, fold):
     # Create the required associative memories.
-    p = es.mem_params
     eam = AssociativeMemory(
         domain,
         mem_size,
-        p[constants.xi_idx],
-        p[constants.sigma_idx],
-        p[constants.iota_idx],
-        p[constants.kappa_idx],
+        es,
     )
     model_prefix = constants.model_name(es)
     filename = constants.classifier_filename(model_prefix, es, fold)
@@ -994,14 +986,10 @@ def remember(msize, mfill, es):
         testing_rounded = qd.quantize(testing_features, msize)
 
         # Create the memory and fill it
-        p = es.mem_params
         eam = AssociativeMemory(
             constants.domain,
             msize,
-            p[constants.xi_idx],
-            p[constants.sigma_idx],
-            p[constants.iota_idx],
-            p[constants.kappa_idx],
+            es,
         )
         end = round(len(filling_features) * mfill / 100.0)
         for features in filling_rounded[:end]:
