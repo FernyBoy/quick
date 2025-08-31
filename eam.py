@@ -348,7 +348,8 @@ def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold,
         - np.sum(confrix[:, unknown])
         - behaviour[constants.correct_response_idx]
     )
-    print(f'Confusion matrix:\n{confrix}')
+    print('Confusion matrix:')
+    constants.print_csv(confrix)
     return confrix, behaviour
 
 
@@ -428,6 +429,7 @@ def ams_size_results(
     print('--------------------------------------------')
     print(f'Filling features shape = {filling_features.shape}')
     print(f'Features to register shape = {ff_rounded.shape}')
+    print(f'Testing features shape = {tf_rounded.shape}')
     print('--------------------------------------------')
 
     for features in ff_rounded:

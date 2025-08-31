@@ -31,7 +31,7 @@ from keras.callbacks import Callback
 import constants
 import dataset
 
-batch_size = 300
+batch_size = 100
 epochs = 300
 patience = 7
 truly_training_percentage = 0.80
