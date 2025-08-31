@@ -25,7 +25,9 @@ from keras.layers import (
     Reshape,
     Conv2DTranspose,
     BatchNormalization,
+    LayerNormalization,
     SpatialDropout2D,
+    UpSampling2D,
 )
 from keras.callbacks import Callback
 import constants
@@ -33,7 +35,7 @@ import dataset
 
 batch_size = 100
 epochs = 300
-patience = 7
+patience = 10
 truly_training_percentage = 0.80
 
 
@@ -54,8 +56,8 @@ def conv_block(entry, layers, filters, dropout, first_block=False):
                 kernel_size=3, padding='same', activation='relu', filters=filters
             )(entry)
         entry = BatchNormalization()(conv)
-    pool = MaxPool2D(pool_size=3, strides=2, padding='same')(entry)
-    drop = SpatialDropout2D(0.4)(pool)
+    pool = MaxPool2D(pool_size=2, strides=2, padding='same')(entry)
+    drop = SpatialDropout2D(dropout)(pool)
     return drop
 
 
@@ -63,35 +65,35 @@ def conv_block(entry, layers, filters, dropout, first_block=False):
 encoder_nlayers = 40
 
 
-def get_encoder():
-    dropout = 0.1
+def get_encoder(domain):
+    dropout = 0.5
     input_data = Input(shape=(dataset.columns, dataset.rows, 1))
-    filters = constants.domain // 16
+    filters = domain // 16
     output = conv_block(input_data, 2, filters, dropout, first_block=True)
     filters *= 2
-    dropout += 0.7
+    dropout -= 0.05
     output = conv_block(output, 2, filters, dropout)
     filters *= 2
-    dropout += 0.7
+    dropout -= 0.05
     output = conv_block(output, 3, filters, dropout)
     filters *= 2
-    dropout += 0.7
+    dropout -= 0.05
     output = conv_block(output, 3, filters, dropout)
     filters *= 2
-    dropout += 0.9
+    dropout -= 0.05
     output = conv_block(output, 3, filters, dropout)
     output = Flatten()(output)
     # output = LayerNormalization(name = 'encoded')(output)
     return input_data, output
 
 
-def get_decoder():
-    input_mem = Input(shape=(constants.domain,))
+def get_decoder(domain):
+    input_mem = Input(shape=(domain,))
     width = dataset.columns // 4
-    filters = constants.domain // 4
-    dense = Dense(
-        width * width * filters, activation='relu', input_shape=(constants.domain,)
-    )(input_mem)
+    filters = domain // 4
+    dense = Dense(width * width * filters, activation='relu', input_shape=(domain,))(
+        input_mem
+    )
     output = Reshape((width, width, filters))(dense)
     dropout = 0.4
     for i in range(2):
@@ -112,13 +114,11 @@ def get_decoder():
 classifier_nlayers = 6
 
 
-def get_classifier():
-    input_mem = Input(shape=(constants.domain,))
-    dense = Dense(constants.domain, activation='relu', input_shape=(constants.domain,))(
-        input_mem
-    )
+def get_classifier(domain):
+    input_mem = Input(shape=(domain,))
+    dense = Dense(domain, activation='relu', input_shape=(domain,))(input_mem)
     drop = Dropout(0.4)(dense)
-    dense = Dense(constants.domain, activation='relu')(drop)
+    dense = Dense(domain, activation='relu')(drop)
     drop = Dropout(0.4)(dense)
     classification = Dense(constants.n_labels, activation='softmax', name='classified')(
         drop
@@ -203,20 +203,20 @@ def train_network(prefix, es):
         training_data = training_data[:truly_training]
         training_labels = training_labels[:truly_training]
 
-        rmse = tf.keras.metrics.RootMeanSquaredError()
+        rmse = keras.metrics.RootMeanSquaredError()
         input_data = Input(shape=(dataset.columns, dataset.rows, 1))
-
-        input_enc, encoded = get_encoder()
+        domain = constants.domain(ds)
+        input_enc, encoded = get_encoder(domain)
         encoder = Model(input_enc, encoded, name='encoder')
         encoder.compile(optimizer='adam')
         encoder.summary()
-        input_cla, classified = get_classifier()
+        input_cla, classified = get_classifier(domain)
         classifier = Model(input_cla, classified, name='classifier')
         classifier.compile(
             loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy']
         )
         classifier.summary()
-        input_dec, decoded = get_decoder()
+        input_dec, decoded = get_decoder(domain)
         decoder = Model(input_dec, decoded, name='decoder')
         decoder.compile(optimizer='adam', loss='mean_squared_error', metrics=[rmse])
         decoder.summary()
@@ -265,9 +265,7 @@ def train_network(prefix, es):
         history = autoencoder.evaluate(testing_data, testing_data, return_dict=True)
         histories.append(history)
         encoder.save(constants.encoder_filename(prefix, es, fold))
-        # encoder.save(f"runs/model-encoder-fld_{fold:03d}.keras")
         decoder.save(constants.decoder_filename(prefix, es, fold))
-        # decoder.save("runs/model-decoder-fld_000.keras")
         classifier.save(constants.classifier_filename(prefix, es, fold))
         prediction_prefix = constants.classification_name(es)
         prediction_filename = constants.data_filename(prediction_prefix, es, fold)
@@ -300,10 +298,10 @@ def obtain_features(model_prefix, features_prefix, labels_prefix, data_prefix, e
             data = s[0]
             labels = s[1]
             suffix = s[2]
+            features = model.predict(data)
             features_filename = constants.data_filename(
                 features_prefix + suffix, es, fold
             )
             labels_filename = constants.data_filename(labels_prefix + suffix, es, fold)
-            features = model.predict(data)
             np.save(features_filename, features)
             np.save(labels_filename, labels)
