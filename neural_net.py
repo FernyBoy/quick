@@ -83,7 +83,7 @@ def get_encoder(domain):
     dropout -= 0.05
     output = conv_block(output, 3, filters, dropout)
     output = Flatten()(output)
-    # output = LayerNormalization(name = 'encoded')(output)
+    output = LayerNormalization(name = 'encoded')(output)
     return input_data, output
 
 
@@ -203,9 +203,9 @@ def train_network(prefix, es):
         training_data = training_data[:truly_training]
         training_labels = training_labels[:truly_training]
 
-        rmse = keras.metrics.RootMeanSquaredError()
+        rmse = tf.keras.metrics.RootMeanSquaredError()
         input_data = Input(shape=(dataset.columns, dataset.rows, 1))
-        domain = constants.domain(ds)
+        domain = constants.domain
         input_enc, encoded = get_encoder(domain)
         encoder = Model(input_enc, encoded, name='encoder')
         encoder.compile(optimizer='adam')

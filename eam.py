@@ -125,7 +125,7 @@ def plot_pre_graph(
     cbar.set_label(_('Entropy'))
 
     s = tag + '-graph_prse_MEAN' + _('-english')
-    graph_filename = constants.picture_filename(s, es, None, es.experiment_run_path)
+    graph_filename = constants.picture_filename(s, es, None)
     plt.savefig(graph_filename, dpi=600)
 
 
@@ -225,7 +225,7 @@ def plot_behs_graph(
     plt.grid(axis='y')
 
     graph_filename = constants.picture_filename(
-        'graph_behaviours_MEAN' + _('-english'), es, None, es.experiment_run_path
+        'graph_behaviours_MEAN' + _('-english'), es, None
     )
     plt.savefig(graph_filename, dpi=600)
 
@@ -605,36 +605,36 @@ def test_memory_sizes(domain, es):
     ]
 
     np.savetxt(
-        constants.csv_filename('memory_precision', es, None, es.experiment_run_path),
+        constants.csv_filename('memory_precision', es, None),
         precision,
         delimiter=',',
     )
     np.savetxt(
-        constants.csv_filename('memory_recall', es, None, es.experiment_run_path),
+        constants.csv_filename('memory_recall', es, None),
         accuracy,
         delimiter=',',
     )
     np.savetxt(
-        constants.csv_filename('memory_entropy', es, None, es.experiment_run_path),
+        constants.csv_filename('memory_entropy', es, None),
         all_entropies,
         delimiter=',',
     )
     np.savetxt(
-        constants.csv_filename('mean_behaviours', es, None, es.experiment_run_path),
+        constants.csv_filename('mean_behaviours', es, None),
         mean_behaviours,
         delimiter=',',
     )
     np.savetxt(
-        constants.csv_filename('stdv_behaviours', es, None, es.experiment_run_path),
+        constants.csv_filename('stdv_behaviours', es, None),
         stdv_behaviours,
         delimiter=',',
     )
     np.save(
-        constants.data_filename('memory_confrixes', es, None, es.experiment_run_path),
+        constants.data_filename('memory_confrixes', es, None),
         average_confrixes,
     )
     np.save(
-        constants.data_filename('behaviours', es, None, es.experiment_run_path),
+        constants.data_filename('behaviours', es, None),
         behaviours,
     )
     plot_pre_graph(
@@ -840,7 +840,6 @@ def test_memory_fills(domain, mem_sizes, es):
                 'main_average_precision' + suffix,
                 es,
                 None,
-                es.experiment_run_path,
             ),
             main_avrge_precisions,
             delimiter=',',
@@ -850,7 +849,6 @@ def test_memory_fills(domain, mem_sizes, es):
                 'main_average_recall' + suffix,
                 es,
                 None,
-                es.experiment_run_path,
             ),
             main_avrge_accuracies,
             delimiter=',',
@@ -860,7 +858,6 @@ def test_memory_fills(domain, mem_sizes, es):
                 'main_average_entropy' + suffix,
                 es,
                 None,
-                es.experiment_run_path,
             ),
             main_avrge_entropies,
             delimiter=',',
@@ -870,7 +867,6 @@ def test_memory_fills(domain, mem_sizes, es):
                 'main_stdev_precision' + suffix,
                 es,
                 None,
-                es.experiment_run_path,
             ),
             main_stdev_precisions,
             delimiter=',',
@@ -880,7 +876,6 @@ def test_memory_fills(domain, mem_sizes, es):
                 'main_stdev_recall' + suffix,
                 es,
                 None,
-                es.experiment_run_path,
             ),
             main_stdev_accuracies,
             delimiter=',',
@@ -890,7 +885,6 @@ def test_memory_fills(domain, mem_sizes, es):
                 'main_stdev_entropy' + suffix,
                 es,
                 None,
-                es.experiment_run_path,
             ),
             main_stdev_entropies,
             delimiter=',',
@@ -941,7 +935,7 @@ def save_conf_matrix(matrix, prefix, es):
 
 def save_learned_params(mem_sizes, fill_percents, es):
     name = constants.learn_params_name(es)
-    filename = constants.data_filename(name, es, None, es.experiment_run_path)
+    filename = constants.data_filename(name, es, None, )
     np.save(filename, np.array([mem_sizes, fill_percents], dtype=int))
 
 
@@ -1227,7 +1221,7 @@ if __name__ == '__main__':
     prefix = constants.memory_parameters_prefix
     filename = constants.csv_filename(prefix)
     parameters = np.genfromtxt(filename, dtype=float, delimiter=',', skip_header=1)
-    exp_settings = constants.ExperimentSettings(parameters)
+    exp_settings = constants.ExperimentSettings(params=parameters)
     print(f'Working directory: {constants.run_path}')
     print(f'Experimental settings: {exp_settings}')
     print(f'Memory size (columns): {constants.domain}')
