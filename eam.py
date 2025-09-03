@@ -1122,9 +1122,11 @@ def store_original_and_test(testing, prod_test, directory, idx, label, es, fold)
 def store_memory(memory, directory, idx, label, es, fold):
     filename = constants.memory_image_filename(directory, idx, label, es, fold)
     full_directory = constants.dirname(filename)
-    constants.create_directory(full_directory)
+    if full_directory not in store_memory.created_dirs:
+        constants.create_directory(full_directory)
+        store_memory.created_dirs.append(full_directory)
     store_image(filename, memory)
-
+store_memory.created_dirs = []
 
 def store_dream(dream, label, index, suffix, es, fold):
     dreams_path = constants.dreams_path + suffix
