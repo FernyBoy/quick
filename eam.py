@@ -399,11 +399,6 @@ def ams_size_results(
     print(f'n_labels = {constants.n_labels}')
     print('--------------------------------------------')
 
-    # Round the values
-    qd = qudeq.QuDeq(filling_features, percentiles=constants.use_percentiles)
-    ff_rounded = qd.quantize(filling_features, msize)
-    tf_rounded = qd.quantize(testing_features, msize)
-
     behaviour = np.zeros(constants.n_behaviours, dtype=np.float64)
 
     # Create the memory.
@@ -421,7 +416,11 @@ def ams_size_results(
         print('--------------------------------------------')
 
         known_labels_mask = filling_labels < known_threshold
-        ff_rounded = ff_rounded[known_labels_mask]
+        filling_features = filling_features[known_labels_mask]
+    # Round the values after filtering them.
+    qd = qudeq.QuDeq(filling_features, percentiles=constants.use_percentiles)
+    ff_rounded = qd.quantize(filling_features, msize)
+    tf_rounded = qd.quantize(testing_features, msize)
     print('--------------------------------------------')
     print(f'Filling features shape = {filling_features.shape}')
     print(f'Features to register shape = {ff_rounded.shape}')
@@ -743,7 +742,6 @@ def test_filling_per_fold(mem_size, domain, es, fold):
     filling_features = filling_features[filling_mask]
     filling_labels = filling_labels[filling_mask]
 
-    qd = qudeq.QuDeq(filling_features, percentiles=constants.use_percentiles)
     known_threshold = constants.n_labels
     print('--------------------------------------------')
     print(f'known_threshold = {known_threshold}')
@@ -761,6 +759,7 @@ def test_filling_per_fold(mem_size, domain, es, fold):
     print(f'filling labels shape = {filling_labels.shape}')
     print(f'filling features shape = {filling_features.shape}')
     print('--------------------------------------------')
+    qd = qudeq.QuDeq(filling_features, percentiles=constants.use_percentiles)
     filling_features = qd.quantize(filling_features, mem_size)
     testing_features = qd.quantize(testing_features, mem_size)
 
@@ -972,6 +971,10 @@ def remember(msize, mfill, es):
         filling_features_filename = constants.input_data_filename(
             filling_features_filename, es, fold
         )
+        filling_labels_filename = constants.labels_name(es) + suffix
+        filling_labels_filename = constants.input_data_filename(
+            filling_labels_filename, es, fold
+        )
 
         suffix = constants.testing_suffix
         testing_features_filename = constants.features_name(es) + suffix
@@ -980,7 +983,13 @@ def remember(msize, mfill, es):
         )
 
         filling_features = np.load(filling_features_filename)
+        filling_labels = np.load(filling_labels_filename)
         testing_features = np.load(testing_features_filename)
+
+        known_threshold = constants.n_labels // 2
+        known_label_mask = filling_labels < known_threshold
+        filling_features = filling_features[known_label_mask]
+
         qd = qudeq.QuDeq(filling_features, percentiles=constants.use_percentiles)
         filling_rounded = qd.quantize(filling_features, msize)
         testing_rounded = qd.quantize(testing_features, msize)
@@ -1132,7 +1141,10 @@ def store_memory(memory, directory, idx, label, es, fold):
         constants.create_directory(full_directory)
         store_memory.created_dirs.append(full_directory)
     store_image(filename, memory)
+
+
 store_memory.created_dirs = []
+
 
 def store_dream(dream, label, index, suffix, es, fold):
     dreams_path = constants.dreams_path + suffix
