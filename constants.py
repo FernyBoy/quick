@@ -289,23 +289,27 @@ def get_full_name(prefix, es):
 
 # Currently, names include nothing about experiment settings.
 def model_name(es):
-    return model_prefix + exp_number_suffix(es)
+    return model_prefix
 
 
 def stats_model_name(es):
-    return stats_prefix + exp_number_suffix(es)
+    return stats_prefix
 
 
 def data_name(es):
-    return data_prefix + exp_number_suffix(es)
+    return data_prefix
 
 
 def features_name(es):
-    return features_prefix + exp_number_suffix(es)
+    return features_prefix
 
 
 def labels_name(es):
-    return labels_prefix + exp_number_suffix(es)
+    return labels_prefix
+
+
+def mem_params_name(es):
+    return memory_parameters_prefix
 
 
 def memories_name(es):
@@ -326,10 +330,6 @@ def classification_name(es):
 
 def learn_params_name(es):
     return learn_params_prefix + exp_number_suffix(es)
-
-
-def mem_params_name(es):
-    return memory_parameters_prefix + exp_number_suffix(es)
 
 
 def dirname(path):
