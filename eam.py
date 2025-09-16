@@ -940,8 +940,14 @@ def save_conf_matrix(matrix, prefix, es):
 
 
 def save_learned_params(mem_sizes, fill_percents, es):
+    """Saves the best memory sizes and filling percentages found.
+
+    The parameters are saved as a 2-row numpy array, where the first row
+    contains the memory sizes, and the second row contains the filling
+    percentages.
+    """
     name = constants.learn_params_name(es)
-    filename = constants.data_filename(name, es, None, es.experiment_run_path)
+    filename = constants.data_filename(name, es, None)
     np.save(filename, np.array([mem_sizes, fill_percents], dtype=int))
 
 
@@ -1168,27 +1174,14 @@ def produce_features_from_data(es):
 def run_evaluation(es):
     """Run evaluation for the given experimental settings.
 
-    The first experiment tests different memory sizes,
-    and it chooses the best ones. Then it evaluates filling percentages and
-    it chooses the best ones too.
-
-    The second experiment assumes the best memory sizes have been selected,
-    and it only evaluates filling percentages, but it does not stores them.
+    The experiments test different memory sizes, and them choose the best
+    ones. Then they evaluate filling percentages and them choose the best
+    ones too.
     """
-    if es.experiment_number == 1:
-        best_memory_sizes = test_memory_sizes(constants.domain, es)
-        print(f'Best memory sizes: {best_memory_sizes}')
-        best_filling_percents = test_memory_fills(
-            constants.domain, best_memory_sizes, es
-        )
-        save_learned_params(best_memory_sizes, best_filling_percents, es)
-    elif es.experiment_number == 2:
-        # Load the learned parameters.
-        learned = load_learned_params(es)
-        best_memory_sizes = [msize for msize, _ in learned]
-        print(f'Best memory sizes: {best_memory_sizes}')
-        # Evaluate the memories with the learned parameters.
-        test_memory_fills(constants.domain, best_memory_sizes, es)
+    best_memory_sizes = test_memory_sizes(constants.domain, es)
+    print(f'Best memory sizes: {best_memory_sizes}')
+    best_filling_percents = test_memory_fills(constants.domain, best_memory_sizes, es)
+    save_learned_params(best_memory_sizes, best_filling_percents, es)
 
 
 def generate_memories(es):

@@ -160,7 +160,16 @@ maximum_percentile = 99.5
 
 
 class ExperimentSettings:
-    def __init__(self, *, params=None, iota=None, kappa=None, xi=None, sigma=None):
+    def __init__(
+        self,
+        *,
+        params=None,
+        iota=None,
+        kappa=None,
+        xi=None,
+        sigma=None,
+        exp_number=None,
+    ):
         if params is None:
             self.mem_params = params_defaults
         else:
@@ -180,6 +189,7 @@ class ExperimentSettings:
             self.mem_params[xi_idx] = xi
         if sigma is not None:
             self.mem_params[sigma_idx] = sigma
+        self.experiment_number = exp_number if exp_number is not None else 0
 
     @property
     def xi(self):
@@ -237,6 +247,10 @@ def numeric_suffix(prefix, value):
     return '-' + prefix + '_' + str(value).zfill(3)
 
 
+def exp_number_suffix(es):
+    return '' if es.experiment_number == 0 else int_suffix(es.experiment_number, 'exp')
+
+
 def fold_suffix(fold):
     return '' if fold is None else int_suffix(fold, 'fld')
 
@@ -275,47 +289,47 @@ def get_full_name(prefix, es):
 
 # Currently, names include nothing about experiment settings.
 def model_name(es):
-    return model_prefix
+    return model_prefix + exp_number_suffix(es)
 
 
 def stats_model_name(es):
-    return stats_prefix
+    return stats_prefix + exp_number_suffix(es)
 
 
 def data_name(es):
-    return data_prefix
+    return data_prefix + exp_number_suffix(es)
 
 
 def features_name(es):
-    return features_prefix
+    return features_prefix + exp_number_suffix(es)
 
 
 def labels_name(es):
-    return labels_prefix
+    return labels_prefix + exp_number_suffix(es)
 
 
 def memories_name(es):
-    return memories_prefix
+    return memories_prefix + exp_number_suffix(es)
 
 
 def recognition_name(es):
-    return recognition_prefix
+    return recognition_prefix + exp_number_suffix(es)
 
 
 def weights_name(es):
-    return weights_prefix
+    return weights_prefix + exp_number_suffix(es)
 
 
 def classification_name(es):
-    return classification_prefix
+    return classification_prefix + exp_number_suffix(es)
 
 
 def learn_params_name(es):
-    return learn_params_prefix
+    return learn_params_prefix + exp_number_suffix(es)
 
 
 def mem_params_name(es):
-    return memory_parameters_prefix
+    return memory_parameters_prefix + exp_number_suffix(es)
 
 
 def dirname(path):
