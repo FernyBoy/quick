@@ -2,7 +2,7 @@ import json
 
 nums_rows = [2, 4, 8, 16, 24, 32]
 class_metric = 'accuracy'
-autor_metric = 'decoder_root_mean_squared_error'
+autor_metric = 'root_mean_squared_error'
 
 
 def print_keys(data):
