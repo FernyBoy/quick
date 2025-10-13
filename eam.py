@@ -398,7 +398,6 @@ def ams_size_results(
 
     print('--------------------------------------------')
     print(f'n_labels = {constants.n_labels}')
-    print('--------------------------------------------')
 
     behaviour = np.zeros(constants.n_behaviours, dtype=np.float64)
 
@@ -408,13 +407,13 @@ def ams_size_results(
         msize,
         es,
     )
+    print('--------------------------------------------')
+    print(f'Filling features shape = {filling_features.shape}')
 
     known_threshold = constants.n_labels
     if es.experiment_number == 2:
         known_threshold //= 2
-        print('--------------------------------------------')
         print(f'Adjusted known_threshold = {known_threshold}')
-        print('--------------------------------------------')
 
         known_labels_mask = filling_labels < known_threshold
         filling_features = filling_features[known_labels_mask]
@@ -422,8 +421,6 @@ def ams_size_results(
     qd = qudeq.QuDeq(filling_features, percentiles=constants.use_percentiles)
     ff_rounded = qd.quantize(filling_features, msize)
     tf_rounded = qd.quantize(testing_features, msize)
-    print('--------------------------------------------')
-    print(f'Filling features shape = {filling_features.shape}')
     print(f'Features to register shape = {ff_rounded.shape}')
     print(f'Testing features shape = {tf_rounded.shape}')
     print('--------------------------------------------')
