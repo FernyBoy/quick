@@ -27,7 +27,6 @@ from keras.layers import (
     BatchNormalization,
     LayerNormalization,
     SpatialDropout2D,
-    UpSampling2D,
 )
 from keras.callbacks import Callback
 import constants
@@ -83,7 +82,7 @@ def get_encoder(domain):
     dropout -= 0.05
     output = conv_block(output, 3, filters, dropout)
     output = Flatten()(output)
-    output = LayerNormalization(name = 'encoded')(output)
+    output = LayerNormalization(name='encoded')(output)
     return input_data, output
 
 

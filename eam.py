@@ -326,10 +326,11 @@ def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold,
             labels.append(label)
         else:
             confrix[label, unknown] += 1
-    data = np.array(data)
-    predictions = np.argmax(classifier.predict(data), axis=1)
-    for correct, prediction in zip(labels, predictions):
-        confrix[correct, prediction] += 1
+    if len(labels) > 0:
+        data = np.array(data)
+        predictions = np.argmax(classifier.predict(data), axis=1)
+        for correct, prediction in zip(labels, predictions):
+            confrix[correct, prediction] += 1
     if es.experiment_number == 1:
         behaviour[constants.no_response_idx] = np.sum(confrix[:, unknown])
     elif es.experiment_number == 2:
