@@ -29,6 +29,86 @@ En resumen, este repositorio no solo contiene el código para un modelo de IA, s
 
 ---
 
+## Instrucciones para la Reproducción de Experimentos
+
+Siga estos pasos para configurar el entorno y replicar los experimentos.
+
+### Requisitos Previos
+*   **Git:** Necesario para clonar el repositorio.
+*   **Anaconda/Miniconda:** El proyecto utiliza `conda` para la gestión de entornos. Asegúrese de tenerlo instalado.
+
+### Paso 1: Clonar el Repositorio
+```bash
+git clone https://github.com/FernyBoy/quick.git
+cd quick
+```
+
+### Paso 2: Preparar Directorios y Datos
+
+1.  **Crear Directorios:**
+    Cree los directorios `data/quick` y `runs` en la raíz del proyecto.
+    ```bash
+    mkdir -p data/quick
+    mkdir runs
+    ```
+
+2.  **Descargar el Conjunto de Datos QuickDraw:**
+    Descargue los archivos de las clases que desee utilizar del conjunto de datos QuickDraw en formato `numpy_bitmap`.
+    *   **Link de descarga:** [Google Cloud Storage - QuickDraw Dataset](https://console.cloud.google.com/storage/browser/quickdraw_dataset/full/numpy_bitmap)
+    *   Coloque los archivos `.npy` descargados (por ejemplo, `full_numpy_bitmap_cat.npy`, `full_numpy_bitmap_dog.npy`, etc.) dentro de la carpeta `data/quick`.
+
+3.  **Copiar Archivos de Configuración:**
+    Copie los archivos de configuración inicial para los experimentos en el directorio `runs`.
+    ```bash
+    cp Start/RunFiles/chosen.csv runs/
+    cp Start/RunFiles/mem_params.csv runs/
+    ```
+
+### Paso 3: Configurar el Entorno de Conda
+
+1.  **Crear el Entorno:**
+    ```bash
+    conda create -n mem python=3 tensorflow-gpu
+    ```
+
+2.  **Activar el Entorno:**
+    ```bash
+    conda activate mem
+    ```
+
+3.  **Instalar Librerías Adicionales:**
+    ```bash
+    conda install matplotlib seaborn pypng joblib docopt
+    ```
+
+### Paso 4: Ejecutar los Experimentos
+
+La ejecución se realiza en fases secuenciales utilizando el script principal `eam.py`.
+
+1.  **Entrenar la Red Neuronal:**
+    Este comando entrena el autoencoder y el clasificador.
+    ```bash
+    python eam.py -n
+    ```
+
+2.  **Generar Vectores de Características (Features):**
+    Este comando utiliza el codificador entrenado para convertir las imágenes en vectores de características.
+    ```bash
+    python eam.py -f
+    ```
+
+3.  **Correr los Experimentos de Evaluación:**
+    Use el flag `-e` seguido del número del experimento. Por ejemplo, para correr el experimento de evaluación principal (búsqueda de parámetros):
+    ```bash
+    python eam.py -e 1
+    ```
+    Para correr el experimento de detección de novedad:
+    ```bash
+    python eam.py -e 2
+    ```
+
+---
+
 ## Descripción de Módulos Principales
 
 A continuación se detallan los componentes que forman el pipeline principal del proyecto.
