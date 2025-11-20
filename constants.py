@@ -46,6 +46,7 @@ stats_prefix = 'model_stats'
 learn_params_prefix = 'learn_params'
 memory_parameters_prefix = 'mem_params'
 chosen_prefix = 'chosen'
+graph_prefix = 'graph'
 
 balanced_data = 'balanced'
 seed_data = 'seed'
@@ -332,6 +333,10 @@ def learn_params_name(es):
     return learn_params_prefix + exp_number_suffix(es)
 
 
+def graph_name(es):
+    return graph_prefix + exp_number_suffix(es)
+
+
 def dirname(path):
     match = re.search('[^/]*$', path)
     if match is None:
@@ -356,24 +361,15 @@ def filename(name_prefix, es=None, fold=None, extension='', sub_dir=None):
         print('Directory ', run_path, ' created ')
     except FileExistsError:
         pass
-    if sub_dir:
-        return (
-            run_path
-            + '/'
-            + sub_dir
-            + '/'
-            + get_full_name(name_prefix, es)
-            + fold_suffix(fold)
-            + extension
-        )
-    else:
-        return (
-            run_path
-            + '/'
-            + get_full_name(name_prefix, es)
-            + fold_suffix(fold)
-            + extension
-        )
+    sub_dir = '' if sub_dir is None else sub_dir + '/'
+    return (
+        run_path
+        + '/'
+        + sub_dir
+        + get_full_name(name_prefix, es)
+        + fold_suffix(fold)
+        + extension
+    )
 
 
 def csv_filename(name_prefix, es=None, fold=None, sub_dir=None):
