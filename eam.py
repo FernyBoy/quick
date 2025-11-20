@@ -66,14 +66,13 @@ if typing.TYPE_CHECKING:
 gettext.install('eam', localedir=None, names=None)
 
 
-def plot_pre_graph(
+def plot_metrics_graph(
     pre_mean,
     acc_mean,
     ent_mean,
     pre_std,
     acc_std,
     es,
-    tag='',
     xlabels=constants.memory_sizes,
     xtitle=None,
     ytitle=None,
@@ -124,42 +123,8 @@ def plot_pre_graph(
     cbar.ax.set_xticklabels(entropy_labels)
     cbar.set_label(_('Entropy'))
 
-    s = tag + '-graph_prse_MEAN' + _('-english')
-    graph_filename = constants.picture_filename(s, es, None)
-    plt.savefig(graph_filename, dpi=600)
-
-
-def plot_size_graph(response_size, size_stdev, es):
-    plt.clf()
-
-    full_length = 100.0
-    step = 0.1
-    main_step = full_length / len(response_size)
-    x = np.arange(0, full_length, main_step)
-
-    # One main step less because levels go on sticks, not
-    # on intervals.
-    xmax = full_length - main_step + step
-    ymax = constants.n_labels
-
-    plt.errorbar(
-        x,
-        response_size,
-        fmt='g-D',
-        yerr=size_stdev,
-        label=_('Average number of responses'),
-    )
-    plt.xlim(0, xmax)
-    plt.ylim(0, ymax)
-    plt.xticks(x, constants.memory_sizes)
-    plt.yticks(np.arange(0, ymax + 1, 1), range(constants.n_labels + 1))
-
-    plt.xlabel(_('Range Quantization Levels'))
-    plt.ylabel(_('Size'))
-    plt.legend(loc=1)
-    plt.grid(True)
-
-    graph_filename = constants.picture_filename('graph_size_MEAN' + _('-english'), es)
+    graph_name = constants.graph_name(es) + '-metrics' + _('-english')
+    graph_filename = constants.figure_filename(graph_name, es, None)
     plt.savefig(graph_filename, dpi=600)
 
 
@@ -224,9 +189,8 @@ def plot_behs_graph(
     plt.legend(loc=0)
     plt.grid(axis='y')
 
-    graph_filename = constants.picture_filename(
-        'graph_behaviours_MEAN' + _('-english'), es, None
-    )
+    graph_name = constants.graph_name(es) + '-behaviours' + _('-english')
+    graph_filename = constants.figure_filename(graph_name, es, None)
     plt.savefig(graph_filename, dpi=600)
 
 
@@ -257,10 +221,10 @@ def plot_features_graph(domain, means, stdevs, es):
         plt.legend(loc='right')
         plt.grid(True)
         filename = constants.features_name(es) + '-' + str(i).zfill(3) + _('-english')
-        plt.savefig(constants.picture_filename(filename, es), dpi=600)
+        plt.savefig(constants.figure_filename(filename, es), dpi=600)
 
 
-def plot_conf_matrix(matrix, xtags, ytags, prefix, es):
+def plot_conf_matrix(matrix, xtags, ytags, name, es):
     plt.clf()
     plt.figure(figsize=(6.4, 4.8))
     seaborn.heatmap(
@@ -274,11 +238,11 @@ def plot_conf_matrix(matrix, xtags, ytags, prefix, es):
     )
     plt.xlabel(_('Prediction'))
     plt.ylabel(_('Label'))
-    filename = constants.picture_filename(prefix, es)
+    filename = constants.figure_filename(name, es)
     plt.savefig(filename, dpi=600)
 
 
-def plot_memory(memory: AssociativeMemory, prefix, es, fold):
+def plot_memory(memory: AssociativeMemory, name, es, fold):
     plt.clf()
     plt.figure(figsize=(6.4, 4.8))
     seaborn.heatmap(
@@ -290,7 +254,7 @@ def plot_memory(memory: AssociativeMemory, prefix, es, fold):
     )
     plt.xlabel(_('Characteristics'))
     plt.ylabel(_('Values'))
-    filename = constants.picture_filename(prefix, es, fold)
+    filename = constants.figure_filename(name, es, fold)
     plt.savefig(filename, dpi=600)
 
 
@@ -634,7 +598,7 @@ def test_memory_sizes(domain, es):
         constants.data_filename('behaviours', es, None),
         behaviours,
     )
-    plot_pre_graph(
+    plot_metrics_graph(
         average_precision,
         average_accuracy,
         average_entropy,
@@ -887,7 +851,7 @@ def test_memory_fills(domain, mem_sizes, es):
             delimiter=',',
         )
 
-        plot_pre_graph(
+        plot_metrics_graph(
             main_avrge_precisions * 100,
             main_avrge_accuracies * 100,
             main_avrge_entropies,

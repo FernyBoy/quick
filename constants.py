@@ -399,7 +399,7 @@ def pickle_filename(name_prefix, es=None, fold=None):
     return filename(name_prefix, es, fold, '.pkl')
 
 
-def picture_filename(name_prefix, es, fold=None, sub_dir=None):
+def figure_filename(name_prefix, es, fold=None, sub_dir=None):
     return filename(name_prefix, es, fold, extension='.svg', sub_dir=sub_dir)
 
 
