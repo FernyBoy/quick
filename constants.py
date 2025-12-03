@@ -208,6 +208,9 @@ class ExperimentSettings:
     def sigma(self):
         return self.mem_params[sigma_idx]
 
+    def __str__(self):
+        return f'ExperimentSettings(iota={self.iota}, kappa={self.kappa}, xi={self.xi}, sigma={self.sigma})'
+
 
 def print_warning(*s):
     print('WARNING:', *s, file=sys.stderr)
