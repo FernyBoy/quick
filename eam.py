@@ -128,31 +128,21 @@ def plot_metrics_graph(
     plt.savefig(graph_filename, dpi=600)
 
 
-def plot_behs_graph(
-    incorrect_no_response,
-    incorrect,
-    correct,
+def plot_responses_graph(
+    mean_behaviours,
+    stdv_behaviours,
     es,
-    correct_no_response=None,
     xtitle=None,
     ytitle=None,
 ):
-    if correct_no_response is None:
-        correct_no_response = np.zeros_like(incorrect_no_response)
-    for i in range(len(incorrect_no_response)):
-        total = (
-            incorrect_no_response[i]
-            + correct_no_response[i]
-            + incorrect[i]
-            + correct[i]
-        ) / 100.0
-        correct_no_response[i] /= total
-        incorrect_no_response
-        incorrect[i] /= total
-        correct[i] /= total
+    response_idxs = [idx for idx in constants.response_behaviours]
+    response_labels = [value for value in constants.response_behaviours.values()]
+    means = mean_behaviours[response_idxs]
+    stdvs = stdv_behaviours[response_idxs]
+    means = 100.0 * means / np.sum(means, axis=0)
+    stdvs = 100.0 * stdvs / np.sum(means, axis=0)
 
     plt.clf()
-
     full_length = 100.0
     step = 0.1
     main_step = full_length / len(constants.memory_sizes)
@@ -164,32 +154,33 @@ def plot_behs_graph(
     ymax = full_length
     width = 5  # the width of the bars: can also be len(x) sequence
 
-    plt.bar(x, correct, width, label=_('Correct response'))
-    cumm = np.array(correct)
-    plt.bar(x, incorrect, width, bottom=cumm, label=_('Incorrect response'))
-    cumm += np.array(incorrect)
-    plt.bar(x, correct_no_response, width, bottom=cumm, label=_('Correct no response'))
-    cumm += np.array(correct_no_response)
-    plt.bar(
-        x, incorrect_no_response, width, bottom=cumm, label=_('Incorrect no response')
-    )
-    cumm += np.array(incorrect_no_response)
+    cum = np.zeros(len(constants.memory_sizes), dtype=float)
+    for values, errors, label in zip(means, stdvs, response_labels):
+        plt.bar(
+            x,
+            values,
+            width,
+            bottom=cum,
+            label=label,
+            yerr=errors,
+        )
+        cum += values
 
     plt.xlim(-width, xmax + width)
     plt.ylim(0.0, ymax)
     plt.xticks(x, constants.memory_sizes)
 
     if xtitle is None:
-        xtitle = _('Range Quantization Levels')
+        xtitle = 'Memory size (rows)'
     if ytitle is None:
-        ytitle = _('Labels')
+        ytitle = _('Percentage')
     plt.xlabel(xtitle)
     plt.ylabel(ytitle)
 
     plt.legend(loc=0)
     plt.grid(axis='y')
 
-    graph_name = constants.graph_name(es) + '-behaviours' + _('-english')
+    graph_name = constants.graph_name(es) + '-responses' + _('-english')
     graph_filename = constants.figure_filename(graph_name, es, None)
     plt.savefig(graph_filename, dpi=600)
 
@@ -295,23 +286,24 @@ def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold,
         predictions = np.argmax(classifier.predict(data), axis=1)
         for correct, prediction in zip(labels, predictions):
             confrix[correct, prediction] += 1
-    if es.experiment_number == 1:
-        behaviour[constants.no_response_idx] = np.sum(confrix[:, unknown])
-    elif es.experiment_number == 2:
-        behaviour[constants.correct_no_response_idx] = np.sum(
-            confrix[threshold:, unknown]
-        )
-        behaviour[constants.incorrect_no_response_idx] = np.sum(
-            confrix[:threshold, unknown]
-        )
+    behaviour[constants.no_response_idx] = np.sum(confrix[:, unknown])
+    behaviour[constants.correct_no_response_idx] = np.sum(confrix[threshold:, unknown])
+    behaviour[constants.incorrect_no_response_idx] = np.sum(
+        confrix[:threshold, unknown]
+    )
     behaviour[constants.correct_response_idx] = np.sum(
         [confrix[i, i] for i in range(threshold)]
     )
-
     behaviour[constants.incorrect_response_idx] = (
-        len(tel)
-        - np.sum(confrix[:, unknown])
+        np.sum(confrix[:threshold, :unknown])
         - behaviour[constants.correct_response_idx]
+    )
+    behaviour[constants.correct_mis_response_idx] = np.sum(
+        [confrix[i, i] for i in range(threshold, constants.n_labels)]
+    )
+    behaviour[constants.incorrect_mis_response_idx] = (
+        np.sum(confrix[threshold:, :unknown])
+        - behaviour[constants.correct_mis_response_idx]
     )
     print('Confusion matrix:')
     constants.print_csv(confrix)
@@ -355,11 +347,6 @@ def ams_size_results(
     es,
 ):
     """Analyze the results of the AMS experiment for the given memory size."""
-    for i in range(5):
-        print(' ')
-
-    np.set_printoptions(threshold=200)
-
     print('--------------------------------------------')
     print(f'n_labels = {constants.n_labels}')
 
@@ -388,9 +375,10 @@ def ams_size_results(
     print(f'Features to register shape = {ff_rounded.shape}')
     print(f'Testing features shape = {tf_rounded.shape}')
     print('--------------------------------------------')
-
+    print('Filling the memory...', end='', flush=True)
     for features in ff_rounded:
         eam.register(features)
+    print('done.')
 
     # Recognize test data.
     confrix, behaviour = recognize_by_memory(
@@ -407,23 +395,27 @@ def ams_size_results(
     # If there are no responses, precision is undefined. Let's set it to 0.
     if es.experiment_number == 1:
         responses = len(testing_labels) - behaviour[constants.no_response_idx]
-        if responses > 0:
-            precision = behaviour[constants.correct_response_idx] / float(responses)
-        else:
-            precision = 0.0  # Avoid division by zero
-
+        precision = (
+            1.0
+            if responses == 0
+            else behaviour[constants.correct_response_idx] / float(responses)
+        )
         accuracy = behaviour[constants.correct_response_idx] / float(
             len(testing_labels)
         )
     elif es.experiment_number == 2:
-        true_positives = behaviour[constants.correct_response_idx]
-        false_positives = behaviour[constants.incorrect_response_idx]
-        true_negatives = behaviour[constants.correct_no_response_idx]
-        if true_positives + false_positives > 0:
-            precision = true_positives / float(true_positives + false_positives)
-        else:
-            precision = 0.0  # Avoid division by zero
-        accuracy = (true_negatives + true_positives) / float(len(testing_labels))
+        TP = (
+            behaviour[constants.correct_response_idx]
+            + behaviour[constants.incorrect_response_idx]
+        )
+        FP = (
+            behaviour[constants.correct_mis_response_idx]
+            + behaviour[constants.incorrect_mis_response_idx]
+        )
+        TN = behaviour[constants.correct_no_response_idx]
+        FN = behaviour[constants.incorrect_no_response_idx]
+        precision = 1.0 if TP + FP == 0 else TP / float(TP + FP)
+        accuracy = (TN + TP) / float(TP + FP + TN + FN)
 
     behaviour[constants.precision_idx] = precision
     behaviour[constants.accuracy_idx] = accuracy
@@ -432,15 +424,8 @@ def ams_size_results(
 
 def test_memory_sizes(domain, es):
     all_entropies = []
-    precision = []
-    accuracy = []
     all_confrixes = []
-
-    no_response = []
-    correct_no_response = []
-    incorrect_no_response = []
-    incorrect_response = []
-    correct_response = []
+    all_behaviours = []
 
     print('Testing the memory')
 
@@ -508,73 +493,32 @@ def test_memory_sizes(domain, es):
 
         # Average entropy among al digits.
         all_entropies.append(entropies)
-
-        # Average precision and recall as percentage
-        precision.append(behaviours[:, constants.precision_idx] * 100)
-        accuracy.append(behaviours[:, constants.accuracy_idx] * 100)
-
-        all_confrixes.append(np.array(confrixes))
-        no_response.append(behaviours[:, constants.no_response_idx])
-        correct_no_response.append(behaviours[:, constants.correct_no_response_idx])
-        incorrect_no_response.append(behaviours[:, constants.incorrect_no_response_idx])
-        incorrect_response.append(behaviours[:, constants.incorrect_response_idx])
-        correct_response.append(behaviours[:, constants.correct_response_idx])
+        all_confrixes.append(confrixes)
+        all.behaviours.append(behaviours)
 
     # Every row is training fold, and every column is a memory size.
     all_entropies = np.array(all_entropies)
-    precision = np.array(precision)
-    accuracy = np.array(accuracy)
     all_confrixes = np.array(all_confrixes)
+    all_behaviours = np.array(all_behaviours)
 
     average_entropy = np.mean(all_entropies, axis=0)
-    average_precision = np.mean(precision, axis=0)
-    stdev_precision = np.std(precision, axis=0)
-    average_accuracy = np.mean(accuracy, axis=0)
-    stdev_accuracy = np.std(accuracy, axis=0)
+    average_precision = np.mean(
+        all_behaviours[:, :, constants.precision_idx] * 100, axis=0
+    )
+    stdev_precision = np.std(
+        all_behaviours[:, :, constants.precision_idx] * 100, axis=0
+    )
+    average_accuracy = np.mean(
+        all_behaviours[:, :, constants.accuracy_idx] * 100, axis=0
+    )
+    stdev_accuracy = np.std(all_behaviours[:, :, constants.accuracy_idx] * 100, axis=0)
     average_confrixes = np.mean(all_confrixes, axis=0)
 
-    no_response = np.array(no_response)
-    correct_no_response = np.array(correct_no_response)
-    incorrect_no_response = np.array(incorrect_no_response)
-    incorrect_response = np.array(incorrect_response)
-    correct_response = np.array(correct_response)
-    mean_no_response = np.mean(no_response, axis=0)
-    stdv_no_response = np.std(no_response, axis=0)
-    mean_correct_no_response = np.mean(correct_no_response, axis=0)
-    stdv_correct_no_response = np.std(correct_no_response, axis=0)
-    mean_incorrect_no_response = np.mean(incorrect_no_response, axis=0)
-    stdv_incorrect_no_response = np.std(incorrect_no_response, axis=0)
-    mean_incorrect_response = np.mean(incorrect_response, axis=0)
-    stdv_incorrect_response = np.std(incorrect_response, axis=0)
-    mean_correct_response = np.mean(correct_response, axis=0)
-    stdv_correct_response = np.std(correct_response, axis=0)
     best_memory_idx = optimum_indexes(average_precision, average_accuracy)
     best_memory_sizes = [constants.memory_sizes[i] for i in best_memory_idx]
-    mean_behaviours = [
-        mean_no_response,
-        mean_correct_no_response,
-        mean_incorrect_no_response,
-        mean_incorrect_response,
-        mean_correct_response,
-    ]
-    stdv_behaviours = [
-        stdv_no_response,
-        stdv_correct_no_response,
-        stdv_incorrect_no_response,
-        stdv_incorrect_response,
-        stdv_correct_response,
-    ]
+    mean_behaviours = np.mean(all_behaviours, axis=0)
+    stdv_behaviours = np.std(all_behaviours, axis=0)
 
-    np.savetxt(
-        constants.csv_filename('memory_precision', es, None),
-        precision,
-        delimiter=',',
-    )
-    np.savetxt(
-        constants.csv_filename('memory_recall', es, None),
-        accuracy,
-        delimiter=',',
-    )
     np.savetxt(
         constants.csv_filename('memory_entropy', es, None),
         all_entropies,
@@ -594,10 +538,6 @@ def test_memory_sizes(domain, es):
         constants.data_filename('memory_confrixes', es, None),
         average_confrixes,
     )
-    np.save(
-        constants.data_filename('behaviours', es, None),
-        behaviours,
-    )
     plot_metrics_graph(
         average_precision,
         average_accuracy,
@@ -606,13 +546,10 @@ def test_memory_sizes(domain, es):
         stdev_accuracy,
         es,
     )
-    plot_behs_graph(
-        mean_incorrect_no_response,
-        mean_incorrect_response,
-        mean_correct_response,
+    plot_responses_graph(
+        mean_behaviours,
+        stdv_behaviours,
         es,
-        correct_no_response=mean_correct_no_response,
-        xtitle='Memory size (rows)',
     )
     print('Memory size evaluation completed!')
     return best_memory_sizes
