@@ -586,14 +586,18 @@ def test_filling_percent(
             len(testing_labels)
         )
     elif es.experiment_number == 2:
-        true_positives = behaviour[constants.correct_response_idx]
-        false_positives = behaviour[constants.incorrect_response_idx]
-        true_negatives = behaviour[constants.correct_no_response_idx]
-        if true_positives + false_positives > 0:
-            precision = true_positives / float(true_positives + false_positives)
-        else:
-            precision = 0.0  # Avoid division by zero
-        accuracy = (true_negatives + true_positives) / float(len(testing_labels))
+        TP = (
+            behaviour[constants.correct_response_idx]
+            + behaviour[constants.incorrect_response_idx]
+        )
+        FP = (
+            behaviour[constants.correct_mis_response_idx]
+            + behaviour[constants.incorrect_mis_response_idx]
+        )
+        TN = behaviour[constants.correct_no_response_idx]
+        FN = behaviour[constants.incorrect_no_response_idx]
+        precision = 1.0 if TP + FP == 0 else TP / float(TP + FP)
+        accuracy = (TN + TP) / float(TP + FP + TN + FN)
 
     behaviour[constants.precision_idx] = precision
     behaviour[constants.accuracy_idx] = accuracy
