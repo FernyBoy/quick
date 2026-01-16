@@ -494,7 +494,7 @@ def test_memory_sizes(domain, es):
         # Average entropy among al digits.
         all_entropies.append(entropies)
         all_confrixes.append(confrixes)
-        all.behaviours.append(behaviours)
+        all_behaviours.append(behaviours)
 
     # Every row is training fold, and every column is a memory size.
     all_entropies = np.array(all_entropies)
@@ -1091,8 +1091,8 @@ def run_evaluation(es):
     """
     best_memory_sizes = test_memory_sizes(constants.domain, es)
     print(f'Best memory sizes: {best_memory_sizes}')
-    best_filling_percents = test_memory_fills(constants.domain, best_memory_sizes, es)
-    save_learned_params(best_memory_sizes, best_filling_percents, es)
+    # best_filling_percents = test_memory_fills(constants.domain, best_memory_sizes, es)
+    # save_learned_params(best_memory_sizes, best_filling_percents, es)
 
 
 def generate_memories(es):
