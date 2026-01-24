@@ -17,8 +17,8 @@
 
 Usage:
   eam -h | --help
-  eam -n [--num-classes=NUM] [--domain=DOMAIN] [--runpath=PATH ] [ -l (en | es) ]
-  eam (-f | -e <experiment> | -r) [--num-classes=NUM] [--domain=DOMAIN] [--runpath=PATH ] [ -l (en | es) ]
+  eam (-n | -f) [--domain=DOMAIN] [--runpath=PATH ] [ -l (en | es) ]
+  eam (-e <experiment> | -r) [--num-classes=NUM] [--domain=DOMAIN] [--runpath=PATH ] [ -l (en | es) ]
 
 Options:
   -h    Show this screen.
