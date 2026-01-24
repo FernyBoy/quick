@@ -28,7 +28,8 @@ from keras.layers import (
     LayerNormalization,
     SpatialDropout2D,
 )
-from keras.callbacks import Callback
+from keras.utils import Sequence
+from keras.callbacks import EarlyStopping
 import constants
 import dataset
 
@@ -125,71 +126,6 @@ def get_classifier(domain):
     return input_mem, classification
 
 
-class EarlyStopping(Callback):
-    """Stop training when the loss gets lower than val_loss.
-
-    Arguments:
-        patience: Number of epochs to wait after condition has been hit.
-        After this number of no reversal, training stops.
-        It starts working after 10% of epochs have taken place.
-    """
-
-    def __init__(self):
-        super(EarlyStopping, self).__init__()
-        self.patience = patience
-        self.prev_val_loss = float('inf')
-        self.prev_val_accuracy = 0.0
-        self.prev_val_rmse = float('inf')
-
-        # best_weights to store the weights at which the loss crossing occurs.
-        self.best_weights = None
-        self.start = min(epochs // 20, 3)
-        self.wait = 0
-
-    def on_train_begin(self, logs=None):
-        # The number of epoch it has waited since loss crossed val_loss.
-        self.wait = 0
-        # The epoch the training stops at.
-        self.stopped_epoch = 0
-
-    def on_epoch_end(self, epoch, logs=None):
-        loss = logs.get('loss')
-        val_loss = logs.get('val_loss')
-        accuracy = logs.get('classifier_accuracy')
-        val_accuracy = logs.get('val_classifier_accuracy')
-        rmse = logs.get('decoder_root_mean_squared_error')
-        val_rmse = logs.get('val_decoder_root_mean_squared_error')
-
-        if epoch < self.start:
-            self.best_weights = self.model.get_weights()
-        elif (loss < val_loss) or (accuracy > val_accuracy) or (rmse < val_rmse):
-            self.wait += 1
-        elif val_accuracy > self.prev_val_accuracy:
-            self.wait = 0
-            self.prev_val_accuracy = val_accuracy
-            self.best_weights = self.model.get_weights()
-        elif val_rmse < self.prev_val_rmse:
-            self.wait = 0
-            self.prev_val_rmse = val_rmse
-            self.best_weights = self.model.get_weights()
-        elif val_loss < self.prev_val_loss:
-            self.wait = 0
-            self.prev_val_loss = val_loss
-            self.best_weights = self.model.get_weights()
-        else:
-            self.wait += 1
-        print(f'Epochs waiting: {self.wait}')
-        if self.wait >= self.patience:
-            self.stopped_epoch = epoch
-            self.model.stop_training = True
-            print('Restoring model weights from the end of the best epoch.')
-            self.model.set_weights(self.best_weights)
-
-    def on_train_end(self, logs=None):
-        if self.stopped_epoch > 0:
-            print('Epoch %05d: early stopping' % (self.stopped_epoch + 1))
-
-
 def train_network(prefix, es):
     confusion_matrix = np.zeros((constants.n_labels, constants.n_labels))
     histories = []
@@ -202,60 +138,77 @@ def train_network(prefix, es):
         training_data = training_data[:truly_training]
         training_labels = training_labels[:truly_training]
 
+        training_generator = DataGeneratorForTraining(
+            training_data, training_labels, batch_size
+        )
+        validation_generator = DataGeneratorForTraining(
+            validation_data, validation_labels, batch_size
+        )
+        testing_generator_for_training = DataGeneratorForTraining(
+            testing_data, testing_labels, batch_size
+        )
+        testing_generator_for_predicting = DataGenerator(testing_data, batch_size)
         rmse = tf.keras.metrics.RootMeanSquaredError()
-        input_data = Input(shape=(dataset.columns, dataset.rows, 1))
-        domain = constants.domain
-        input_enc, encoded = get_encoder(domain)
-        encoder = Model(input_enc, encoded, name='encoder')
-        encoder.compile(optimizer='adam')
-        encoder.summary()
-        input_cla, classified = get_classifier(domain)
-        classifier = Model(input_cla, classified, name='classifier')
-        classifier.compile(
-            loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy']
-        )
-        classifier.summary()
-        input_dec, decoded = get_decoder(domain)
-        decoder = Model(input_dec, decoded, name='decoder')
-        decoder.compile(optimizer='adam', loss='mean_squared_error', metrics=[rmse])
-        decoder.summary()
-        encoded = encoder(input_data)
-        decoded = decoder(encoded)
-        classified = classifier(encoded)
-        full_classifier = Model(
-            inputs=input_data, outputs=classified, name='full_classifier'
-        )
-        full_classifier.compile(
-            optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy']
-        )
-        autoencoder = Model(inputs=input_data, outputs=decoded, name='autoencoder')
-        autoencoder.compile(loss='huber', optimizer='adam', metrics=[rmse])
+        strategy = tf.distribute.MirroredStrategy()
+        with strategy.scope():
+            input_data = Input(shape=(dataset.columns, dataset.rows, 1))
+            domain = constants.domain
+            input_enc, encoded = get_encoder(domain)
+            encoder = Model(input_enc, encoded, name='encoder')
+            encoder.compile(optimizer='adam')
+            encoder.summary()
+            input_cla, classified = get_classifier(domain)
+            classifier = Model(input_cla, classified, name='classifier')
+            classifier.compile(
+                loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy']
+            )
+            classifier.summary()
+            input_dec, decoded = get_decoder(domain)
+            decoder = Model(input_dec, decoded, name='decoder')
+            decoder.compile(optimizer='adam', loss='mean_squared_error', metrics=[rmse])
+            decoder.summary()
+            encoded = encoder(input_data)
+            decoded = decoder(encoded)
+            classified = classifier(encoded)
+            full_classifier = Model(
+                inputs=input_data, outputs=classified, name='full_classifier'
+            )
+            full_classifier.compile(
+                optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy']
+            )
+            autoencoder = Model(inputs=input_data, outputs=decoded, name='autoencoder')
+            autoencoder.compile(loss='huber', optimizer='adam', metrics=[rmse])
 
-        model = Model(inputs=input_data, outputs=[classified, decoded])
-        model.compile(
-            loss=['categorical_crossentropy', 'mean_squared_error'],
-            optimizer='adam',
-            metrics={'classifier': 'accuracy', 'decoder': rmse},
+            model = Model(inputs=input_data, outputs=[classified, decoded])
+            model.compile(
+                loss=['categorical_crossentropy', 'mean_squared_error'],
+                optimizer='adam',
+                metrics={'classifier': 'accuracy', 'decoder': rmse},
+            )
+            model.summary()
+        early_stopping = EarlyStopping(
+            monitor='val_classifier_accuracy',
+            patience=patience,
+            restore_best_weights=True,
+            mode='min',
+            verbose=1,
         )
-        model.summary()
         history = model.fit(
-            training_data,
-            (training_labels, training_data),
+            training_generator,
             batch_size=batch_size,
             epochs=epochs,
-            validation_data=(
-                validation_data,
-                {'classifier': validation_labels, 'decoder': validation_data},
-            ),
-            callbacks=[EarlyStopping()],
+            validation_data=validation_generator,
+            callbacks=[early_stopping],
             verbose=2,
         )
         histories.append(history)
         history = full_classifier.evaluate(
-            testing_data, testing_labels, return_dict=True
+            testing_generator_for_training, return_dict=True
         )
         histories.append(history)
-        predicted_labels = np.argmax(full_classifier.predict(testing_data), axis=1)
+        predicted_labels = np.argmax(
+            full_classifier.predict(testing_generator_for_predicting), axis=1
+        )
         confusion_matrix += tf.math.confusion_matrix(
             np.argmax(testing_labels, axis=1),
             predicted_labels,
@@ -298,9 +251,40 @@ def obtain_features(model_prefix, features_prefix, labels_prefix, data_prefix, e
             labels = s[1]
             suffix = s[2]
             features = model.predict(data)
+            data_filename = constants.data_filename(data_prefix + suffix, es, fold)
             features_filename = constants.data_filename(
                 features_prefix + suffix, es, fold
             )
             labels_filename = constants.data_filename(labels_prefix + suffix, es, fold)
+            np.save(data_filename, data)
             np.save(features_filename, features)
             np.save(labels_filename, labels)
+
+
+class DataGenerator(Sequence):
+    def __init__(self, data, batch_size, **kwargs):
+        super().__init__(**kwargs)
+        self.data = data
+        self.batch_size = batch_size
+
+    def __len__(self):
+        return int(np.ceil(len(self.data) / float(self.batch_size)))
+
+    def __getitem__(self, idx):
+        batch_data = self.data[idx * self.batch_size : (idx + 1) * self.batch_size]
+        return batch_data, {'decoder': batch_data}
+
+
+class DataGeneratorForTraining(Sequence):
+    def __init__(self, data, labels, batch_size, **kwargs):
+        super().__init__(**kwargs)
+        self.data, self.labels = data, labels
+        self.batch_size = batch_size
+
+    def __len__(self):
+        return int(np.ceil(len(self.data) / float(self.batch_size)))
+
+    def __getitem__(self, idx):
+        batch_data = self.data[idx * self.batch_size : (idx + 1) * self.batch_size]
+        batch_labels = self.labels[idx * self.batch_size : (idx + 1) * self.batch_size]
+        return batch_data, {'classifier': batch_labels, 'decoder': batch_data}
