@@ -110,11 +110,10 @@ all_n_labels = list(range(n_labels))
 
 
 def set_n_labels(num_classes):
-    if (num_classes < 2) or (num_classes > n_labels):
-        raise ValueError(
-            f'The number of classes must be between 2 and n_labels ({n_labels}).'
-        )
     global n_labels, all_n_labels
+    if (num_classes < 2) or (num_classes > n_labels):
+        # Only a number of classes lower than or equal to the default n_labels is allowed.
+        raise ValueError(f'The number of classes must be between 2 and ({n_labels}).')
     n_labels = num_classes
     all_n_labels = list(range(n_labels))
 
