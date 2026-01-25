@@ -90,9 +90,7 @@ def get_decoder(domain):
     input_mem = Input(shape=(domain,))
     width = dataset.columns // 4
     filters = domain // 4
-    dense = Dense(width * width * filters, activation='relu')(
-        input_mem
-    )
+    dense = Dense(width * width * filters, activation='relu')(input_mem)
     output = Reshape((width, width, filters))(dense)
     dropout = 0.4
     for i in range(2):
@@ -150,41 +148,37 @@ def train_network(prefix, es):
         rmse = tf.keras.metrics.RootMeanSquaredError()
         strategy = tf.distribute.MirroredStrategy()
         with strategy.scope():
-            input_data = Input(shape=(dataset.columns, dataset.rows, 1))
             domain = constants.domain
-            input_enc, encoded = get_encoder(domain)
-            encoder = Model(input_enc, encoded, name='encoder')
-            encoder.compile(optimizer='adam')
-            encoder.summary()
-            input_cla, classified = get_classifier(domain)
-            classifier = Model(input_cla, classified, name='classifier')
-            classifier.compile(
-                loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy']
-            )
-            classifier.summary()
-            input_dec, decoded = get_decoder(domain)
-            decoder = Model(input_dec, decoded, name='decoder')
-            decoder.compile(optimizer='adam', loss='mean_squared_error', metrics=[rmse])
-            decoder.summary()
+            input_data = Input(shape=(dataset.columns, dataset.rows, 1))
+            input_enc, output_enc = get_encoder(domain)
+            input_class, output_class = get_classifier(domain)
+            input_dec, output_dec = get_decoder(domain)
+
+            encoder = Model(input_enc, output_enc, name='encoder')
+            classifier = Model(input_class, output_class, name='classifier')
+            decoder = Model(input_dec, output_dec, name='decoder')
             encoded = encoder(input_data)
             decoded = decoder(encoded)
             classified = classifier(encoded)
-            full_classifier = Model(
-                inputs=input_data, outputs=classified, name='full_classifier'
+            model = Model(
+                inputs=input_data,
+                outputs={'classifier': classified, 'decoder': decoded},
             )
-            full_classifier.compile(
-                optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy']
-            )
-            autoencoder = Model(inputs=input_data, outputs=decoded, name='autoencoder')
-            autoencoder.compile(loss='huber', optimizer='adam', metrics=[rmse])
-
-            model = Model(inputs=input_data, outputs=[classified, decoded])
             model.compile(
                 loss=['categorical_crossentropy', 'mean_squared_error'],
                 optimizer='adam',
                 metrics={'classifier': 'accuracy', 'decoder': rmse},
             )
+            encoder.summary()
+            classifier.summary()
+            decoder.summary()
             model.summary()
+
+            full_classifier = Model(
+                inputs=input_data, outputs=classified, name='full_classifier'
+            )
+            # autoencoder = Model(inputs=input_data, outputs=decoded, name='autoencoder')
+
         early_stopping = EarlyStopping(
             monitor='val_classifier_accuracy',
             patience=patience,
@@ -201,9 +195,7 @@ def train_network(prefix, es):
             verbose=2,
         )
         histories.append(history)
-        history = full_classifier.evaluate(
-            testing_generator_for_training, return_dict=True
-        )
+        history = model.evaluate(testing_generator_for_training, return_dict=True)
         histories.append(history)
         predicted_labels = np.argmax(
             full_classifier.predict(testing_generator_for_predicting), axis=1
@@ -213,8 +205,6 @@ def train_network(prefix, es):
             predicted_labels,
             num_classes=constants.n_labels,
         )
-        history = autoencoder.evaluate(testing_data, testing_data, return_dict=True)
-        histories.append(history)
         encoder.save(constants.encoder_filename(prefix, es, fold))
         decoder.save(constants.decoder_filename(prefix, es, fold))
         classifier.save(constants.classifier_filename(prefix, es, fold))
