@@ -48,7 +48,6 @@ def conv_block(entry, layers, filters, dropout, first_block=False):
                 padding='same',
                 activation='relu',
                 filters=filters,
-                input_shape=(dataset.columns, dataset.rows, 1),
             )(entry)
             first_block = False
         else:
@@ -91,7 +90,7 @@ def get_decoder(domain):
     input_mem = Input(shape=(domain,))
     width = dataset.columns // 4
     filters = domain // 4
-    dense = Dense(width * width * filters, activation='relu', input_shape=(domain,))(
+    dense = Dense(width * width * filters, activation='relu')(
         input_mem
     )
     output = Reshape((width, width, filters))(dense)
@@ -116,7 +115,7 @@ classifier_nlayers = 6
 
 def get_classifier(domain):
     input_mem = Input(shape=(domain,))
-    dense = Dense(domain, activation='relu', input_shape=(domain,))(input_mem)
+    dense = Dense(domain, activation='relu')(input_mem)
     drop = Dropout(0.4)(dense)
     dense = Dense(domain, activation='relu')(drop)
     drop = Dropout(0.4)(dense)
