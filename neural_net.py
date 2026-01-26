@@ -230,10 +230,26 @@ def obtain_features(model_prefix, features_prefix, labels_prefix, data_prefix, e
         training_data, training_labels = dataset.get_training(fold)
         filling_data, filling_labels = dataset.get_filling(fold)
         testing_data, testing_labels = dataset.get_testing(fold)
+        training_generator_for_predicting = DataGenerator(training_data, batch_size)
+        filling_generator_for_predicting = DataGenerator(filling_data, batch_size)
+        testing_generator_for_predicting = DataGenerator(testing_data, batch_size)
+
         settings = [
-            (training_data, training_labels, constants.training_suffix),
-            (filling_data, filling_labels, constants.filling_suffix),
-            (testing_data, testing_labels, constants.testing_suffix),
+            (
+                training_generator_for_predicting,
+                training_labels,
+                constants.training_suffix,
+            ),
+            (
+                filling_generator_for_predicting,
+                filling_labels,
+                constants.filling_suffix,
+            ),
+            (
+                testing_generator_for_predicting,
+                testing_labels,
+                constants.testing_suffix,
+            ),
         ]
         for s in settings:
             data = s[0]
