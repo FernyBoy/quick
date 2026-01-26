@@ -237,25 +237,30 @@ def obtain_features(model_prefix, features_prefix, labels_prefix, data_prefix, e
         settings = [
             (
                 training_generator_for_predicting,
+                training_data,
                 training_labels,
                 constants.training_suffix,
             ),
             (
                 filling_generator_for_predicting,
+                filling_data,
                 filling_labels,
                 constants.filling_suffix,
             ),
             (
                 testing_generator_for_predicting,
+                testing_data,
                 testing_labels,
                 constants.testing_suffix,
             ),
         ]
         for s in settings:
-            data = s[0]
-            labels = s[1]
-            suffix = s[2]
-            features = model.predict(data)
+            generator = s[0]
+            data = s[1]
+            labels = s[2]
+            suffix = s[3]
+            features = model.predict(generator)
+            print(f'Features shape: {features.shape}')
             data_filename = constants.data_filename(data_prefix + suffix, es, fold)
             features_filename = constants.data_filename(
                 features_prefix + suffix, es, fold
