@@ -25,8 +25,7 @@ import numpy as np
 data_path = 'data/quick'
 run_path = 'runs'
 idx_digits = 3
-prep_data_fname = 'prep_data.npy'
-prep_labels_fname = 'prep_labels.npy'
+prep_h5_fname = 'prep_dataset.h5'
 
 image_path = 'images'
 testing_path = 'test'
@@ -98,9 +97,11 @@ kappa_idx = 1
 xi_idx = 2
 sigma_idx = 3
 
-nn_training_percent = 0.70
+nn_training_percent = 0.50
+nn_validating_percent = 0.20
+nn_testing_percent = 0.10
 am_filling_percent = 0.20
-am_testing_percent = 0.10
+am_testing_percent = nn_testing_percent
 
 # The number of classes used for training the neural networks, and for testing
 # the memory system. It must be a pair number, because in the negation experiment only

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import numpy as np
+import h5py
 import tensorflow as tf
 from keras import Model
 from keras.layers import (
@@ -28,15 +29,16 @@ from keras.layers import (
     LayerNormalization,
     SpatialDropout2D,
 )
-from keras.utils import Sequence
 from keras.callbacks import EarlyStopping
 import constants
 import dataset
 
-batch_size = 100
 epochs = 300
 patience = 10
 truly_training_percentage = 0.80
+# Batch size and the number of workers are adjusted to having 2 L4 GPUs.
+num_workers = 12  # Number of CPU cores for data prep
+batch_size = 2048
 
 
 def conv_block(entry, layers, filters, dropout, first_block=False):
@@ -127,24 +129,12 @@ def train_network(prefix, es):
     confusion_matrix = np.zeros((constants.n_labels, constants.n_labels))
     histories = []
     for fold in range(constants.n_folds):
-        training_data, training_labels = dataset.get_training(fold, categorical=True)
-        testing_data, testing_labels = dataset.get_testing(fold, categorical=True)
-        truly_training = int(len(training_labels) * truly_training_percentage)
-        validation_data = training_data[truly_training:]
-        validation_labels = training_labels[truly_training:]
-        training_data = training_data[:truly_training]
-        training_labels = training_labels[:truly_training]
+        training_gen = dataset.get_training(fold, categorical=True)
+        # No shuffling is needed for validation nor testing.
+        validating_gen = dataset.get_validating(fold, categorical=True, shuffle=False)
+        testing_gen = dataset.get_testing(fold, categorical=True, shuffle=False)
+        predict_gen = dataset.get_testing(fold, predict_only=True)
 
-        training_generator = DataGeneratorForTraining(
-            training_data, training_labels, batch_size
-        )
-        validation_generator = DataGeneratorForTraining(
-            validation_data, validation_labels, batch_size
-        )
-        testing_generator_for_training = DataGeneratorForTraining(
-            testing_data, testing_labels, batch_size
-        )
-        testing_generator_for_predicting = DataGenerator(testing_data, batch_size)
         rmse = tf.keras.metrics.RootMeanSquaredError()
         strategy = tf.distribute.MirroredStrategy()
         with strategy.scope():
@@ -166,7 +156,9 @@ def train_network(prefix, es):
             )
             model.compile(
                 loss=['categorical_crossentropy', 'mean_squared_error'],
-                optimizer='adam',
+                optimizer=tf.keras.optimizers.Adam(
+                    learning_rate=2e-2
+                ),  # Learning rate for a batch size of 2048
                 metrics={'classifier': 'accuracy', 'decoder': rmse},
             )
             encoder.summary()
@@ -187,21 +179,24 @@ def train_network(prefix, es):
             verbose=1,
         )
         history = model.fit(
-            training_generator,
+            training_gen,
             batch_size=batch_size,
             epochs=epochs,
-            validation_data=validation_generator,
+            validation_data=validating_gen,
             callbacks=[early_stopping],
+            workers=num_workers,  # Use multiple CPU cores for data prep
+            use_multiprocessing=True,  # True if your generator is thread-safe
             verbose=2,
         )
         histories.append(history)
-        history = model.evaluate(testing_generator_for_training, return_dict=True)
+        history = model.evaluate(testing_gen, return_dict=True)
         histories.append(history)
-        predicted_labels = np.argmax(
-            full_classifier.predict(testing_generator_for_predicting), axis=1
-        )
+        predicted_labels = np.argmax(full_classifier.predict(predict_gen), axis=1)
+        # Retrieve True Labels directly from HDF5 using generator indices
+        with h5py.File(testing_gen.h5_path, 'r') as f:
+            true_labels = f['labels'][testing_gen.indices]
         confusion_matrix += tf.math.confusion_matrix(
-            np.argmax(testing_labels, axis=1),
+            true_labels,
             predicted_labels,
             num_classes=constants.n_labels,
         )
@@ -217,84 +212,51 @@ def train_network(prefix, es):
 
 
 def obtain_features(model_prefix, features_prefix, labels_prefix, data_prefix, es):
-    """Generate features for sound segments, corresponding to phonemes.
-
-    Uses the previously trained neural networks for generating the features.
-    """
     for fold in range(constants.n_folds):
-        # Load de encoder
+        # Load the encoder
         filename = constants.encoder_filename(model_prefix, es, fold)
         model = tf.keras.models.load_model(filename)
-        model.summary()
 
-        training_data, training_labels = dataset.get_training(fold)
-        filling_data, filling_labels = dataset.get_filling(fold)
-        testing_data, testing_labels = dataset.get_testing(fold)
-        training_generator_for_predicting = DataGenerator(training_data, batch_size)
-        filling_generator_for_predicting = DataGenerator(filling_data, batch_size)
-        testing_generator_for_predicting = DataGenerator(testing_data, batch_size)
-
+        # 1. Get Generators (which replace the raw data arrays)
+        # We set predict_only=True so the generator returns ONLY images for model.predict
+        train_gen = dataset.get_training(fold, predict_only=True)
+        fill_gen = dataset.get_filling(fold, predict_only=True)
+        test_gen = dataset.get_testing(fold, predict_only=True)
         settings = [
-            (
-                training_generator_for_predicting,
-                training_data,
-                training_labels,
-                constants.training_suffix,
-            ),
-            (
-                filling_generator_for_predicting,
-                filling_data,
-                filling_labels,
-                constants.filling_suffix,
-            ),
-            (
-                testing_generator_for_predicting,
-                testing_data,
-                testing_labels,
-                constants.testing_suffix,
-            ),
+            (train_gen, constants.training_suffix),
+            (fill_gen, constants.filling_suffix),
+            (test_gen, constants.testing_suffix),
         ]
-        for s in settings:
-            generator = s[0]
-            data = s[1]
-            labels = s[2]
-            suffix = s[3]
-            features = model.predict(generator)
-            print(f'Features shape: {features.shape}')
+
+        for gen, suffix in settings:
+            # 2. Parallel Prediction on Dual L4s
+            # Keras handles the distribution if you wrap this in a strategy scope
+            # or simply rely on its internal optimization for generators.
+            print(f'Generating features for {suffix}...')
+            features = model.predict(
+                gen,
+                workers=num_workers,
+                use_multiprocessing=True,
+                verbose=1,
+            )
+
+            # 3. Retrieve Labels and Raw Data for Saving
+            # Since we can't hold all 7M images in RAM easily, we pull them
+            # from the H5 file using the indices stored in the generator.
+            with h5py.File(gen.h5_path, 'r') as f:
+                # We use the generator's indices to ensure the order matches the features
+                indices = gen.indices
+                data = f['images'][indices]
+                labels = f['labels'][indices]
+
+            # 4. Save to .npy (as per your original requirement)
             data_filename = constants.data_filename(data_prefix + suffix, es, fold)
             features_filename = constants.data_filename(
                 features_prefix + suffix, es, fold
             )
             labels_filename = constants.data_filename(labels_prefix + suffix, es, fold)
+
+            print('Saving data, features and labels ...')
             np.save(data_filename, data)
             np.save(features_filename, features)
             np.save(labels_filename, labels)
-
-
-class DataGenerator(Sequence):
-    def __init__(self, data, batch_size, **kwargs):
-        super().__init__(**kwargs)
-        self.data = data
-        self.batch_size = batch_size
-
-    def __len__(self):
-        return int(np.ceil(len(self.data) / float(self.batch_size)))
-
-    def __getitem__(self, idx):
-        batch_data = self.data[idx * self.batch_size : (idx + 1) * self.batch_size]
-        return batch_data, {'decoder': batch_data}
-
-
-class DataGeneratorForTraining(Sequence):
-    def __init__(self, data, labels, batch_size, **kwargs):
-        super().__init__(**kwargs)
-        self.data, self.labels = data, labels
-        self.batch_size = batch_size
-
-    def __len__(self):
-        return int(np.ceil(len(self.data) / float(self.batch_size)))
-
-    def __getitem__(self, idx):
-        batch_data = self.data[idx * self.batch_size : (idx + 1) * self.batch_size]
-        batch_labels = self.labels[idx * self.batch_size : (idx + 1) * self.batch_size]
-        return batch_data, {'classifier': batch_labels, 'decoder': batch_data}
