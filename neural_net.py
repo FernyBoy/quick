@@ -68,7 +68,7 @@ encoder_nlayers = 40
 
 def get_encoder(domain):
     dropout = 0.5
-    input_data = Input(shape=(dataset.columns, dataset.rows, 1))
+    input_data = Input(shape=(dataset.rows, dataset.columns, 1))
     filters = domain // 16
     output = conv_block(input_data, 2, filters, dropout, first_block=True)
     filters *= 2
@@ -139,7 +139,7 @@ def train_network(prefix, es):
         strategy = tf.distribute.MirroredStrategy()
         with strategy.scope():
             domain = constants.domain
-            input_data = Input(shape=(dataset.columns, dataset.rows, 1))
+            input_data = Input(shape=(dataset.rows, dataset.columns, 1))
             input_enc, output_enc = get_encoder(domain)
             input_class, output_class = get_classifier(domain)
             input_dec, output_dec = get_decoder(domain)
@@ -260,3 +260,28 @@ def obtain_features(model_prefix, features_prefix, labels_prefix, data_prefix, e
             np.save(data_filename, data)
             np.save(features_filename, features)
             np.save(labels_filename, labels)
+
+
+def get_tf_dataset(generator):
+    output_signature = (
+        tf.TensorSpec(
+            shape=(None, dataset.rows, dataset.columns, 1), dtype=tf.float32
+        ),  # Images
+        {
+            'classifier': tf.TensorSpec(
+                shape=(None, constants.n_labels), dtype=tf.float32
+            ),
+            'decoder': tf.TensorSpec(
+                shape=(None, dataset.rows, dataset.columns, 1), dtype=tf.float32
+            ),
+        },
+    )
+    dataset = tf.data.Dataset.from_generator(
+        lambda: generator, output_signature=output_signature
+    )
+
+    # CRITICAL for dual L4 performance:
+    # Prefetch prepares batch N+1 while GPUs are computing batch N
+    dataset = dataset.prefetch(tf.data.AUTOTUNE)
+
+    return dataset

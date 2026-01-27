@@ -1113,7 +1113,7 @@ def store_dream(dream, label, index, suffix, es, fold):
 
 
 def store_image(filename, array):
-    pixels = array.reshape(dataset.columns, dataset.rows)
+    pixels = array.reshape(dataset.rows, dataset.columns)
     pixels = pixels.round().astype(np.uint8)
     png.from_array(pixels, 'L;8').save(filename)
 
