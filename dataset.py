@@ -215,6 +215,23 @@ def _load_quickdraw(path):
     labels = np.concatenate(labels_list, axis=0)
 
     print(f'Loaded a total of {data.shape[0]} images of {len(label_dict)} classes.')
+    return shuffle_dataset(data, labels)
+
+
+def shuffle_dataset(data, labels):
+    print('Shuffling the dataset before storing it...')
+    # 1. Create an array of indices [0, 1, 2, ..., N-1]
+    indices = np.arange(data.shape[0])
+
+    # 2. Shuffle the indices in-place (very fast, low memory)
+    np.random.shuffle(indices)
+
+    print('Reordering arrays...')
+    # 3. Use 'fancy indexing' to reorder both arrays in one go
+    # This creates a new shuffled array.
+    # For 7M images (uint8), this uses ~5.5GB of RAM temporarily.
+    data = data[indices]
+    labels = labels[indices]
     return data, labels
 
 
