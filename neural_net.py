@@ -193,8 +193,8 @@ def train_network(prefix, es):
         histories.append(history)
         predicted_labels = np.argmax(full_classifier.predict(predict_gen), axis=1)
         # Retrieve True Labels directly from HDF5 using generator indices
-        with h5py.File(testing_gen.h5_path, 'r') as f:
-            true_labels = f['labels'][testing_gen.indices]
+        with h5py.File(predict_gen.hdf5_path, 'r') as f:
+            true_labels = f['labels'][predict_gen.indices]
         confusion_matrix += tf.math.confusion_matrix(
             true_labels,
             predicted_labels,
@@ -243,7 +243,7 @@ def obtain_features(model_prefix, features_prefix, labels_prefix, data_prefix, e
             # 3. Retrieve Labels and Raw Data for Saving
             # Since we can't hold all 7M images in RAM easily, we pull them
             # from the H5 file using the indices stored in the generator.
-            with h5py.File(gen.h5_path, 'r') as f:
+            with h5py.File(gen.hdf5_path, 'r') as f:
                 # We use the generator's indices to ensure the order matches the features
                 indices = gen.indices
                 data = f['images'][indices]

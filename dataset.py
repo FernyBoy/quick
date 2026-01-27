@@ -102,10 +102,10 @@ def _get_segment(
     shuffle=True,
     predict_only=False,
 ):
-    h5_path = os.path.join(constants.data_path, constants.prep_h5_fname)
+    hdf5_path = os.path.join(constants.data_path, constants.prep_hdf5_fname)
 
-    # Run the one-time loading/balancing logic if H5 doesn't exist
-    if not os.path.exists(h5_path):
+    # Run the one-time loading/balancing logic if HDF5 doesn't exist
+    if not os.path.exists(hdf5_path):
         total_size = _load_dataset(constants.data_path)
 
     # Use your existing fold logic to calculate start/end points
@@ -137,9 +137,9 @@ def _get_segment(
     segment_indices = np.arange(p, q)
 
     return QuickDrawGenerator(
-        h5_path,
+        hdf5_path,
         segment_indices,
-        categorical,
+        categorical=categorical,
         batch_size=batch_size,
         shuffle=shuffle,
         predict_only=predict_only,
@@ -155,10 +155,10 @@ def _load_dataset(path):
 
 def _save_dataset_as_hdf5(data, labels, path):
     """Saves the balanced, shuffled data into a permanent HDF5 container."""
-    h5_fname = os.path.join(path, constants.prep_hdf5_fname)
-    print(f'Creating HDF5 dataset at {h5_fname}...')
+    hdf5_fname = os.path.join(path, constants.prep_hdf5_fname)
+    print(f'Creating HDF5 dataset at {hdf5_fname}...')
 
-    with h5py.File(h5_fname, 'w') as f:
+    with h5py.File(hdf5_fname, 'w') as f:
         # We store as uint8 (0-255) to save disk space (7M images = ~5.5GB)
         # If we stored as float32, it would be ~22GB!
         f.create_dataset('images', data=data.astype('uint8'), compression='gzip')
@@ -221,14 +221,14 @@ def _load_quickdraw(path):
 class QuickDrawGenerator(Sequence):
     def __init__(
         self,
-        h5_path,
+        hdf5_path,
         indices,
-        categorical,
+        categorical=False,
         batch_size=2048,
         shuffle=True,
         predict_only=False,
     ):
-        self.h5_path = h5_path
+        self.hdf5_path = hdf5_path
         self.indices = indices  # These are the indices for the specific fold/segment
         self.categorical = categorical
         self.batch_size = batch_size
@@ -255,7 +255,7 @@ class QuickDrawGenerator(Sequence):
         rev_map = np.argsort(sort_map)
         sorted_indices = batch_indices[sort_map]
 
-        with h5py.File(self.h5_path, 'r') as f:
+        with h5py.File(self.hdf5_path, 'r') as f:
             x = f['images'][sorted_indices]
             # Labels are retrieved only if not in predict-only mode
             if not self.predict_only:

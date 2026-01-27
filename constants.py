@@ -25,7 +25,7 @@ import numpy as np
 data_path = 'data/quick'
 run_path = 'runs'
 idx_digits = 3
-prep_h5_fname = 'prep_dataset.h5'
+prep_hdf5_fname = 'prep_dataset.h5'
 
 image_path = 'images'
 testing_path = 'test'
