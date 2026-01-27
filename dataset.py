@@ -107,9 +107,10 @@ def _get_segment(
     # Run the one-time loading/balancing logic if HDF5 doesn't exist
     if not os.path.exists(hdf5_path):
         total_size = _load_dataset(constants.data_path)
+    else:
+        with h5py.File(hdf5_path, 'r') as f:
+            total_size = f['labels'].shape[0]
 
-    # Use your existing fold logic to calculate start/end points
-    # (Simplified version of your logic here)
     training_size = int(total_size * constants.nn_training_percent)
     validating_size = int(total_size * constants.nn_validating_percent)
     filling_size = int(total_size * constants.am_filling_percent)
