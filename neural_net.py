@@ -171,6 +171,10 @@ def train_network(prefix, es):
             )
             # autoencoder = Model(inputs=input_data, outputs=decoded, name='autoencoder')
 
+        # Wrap the generators as tf.data.Dataset for better performance
+        train_ds = get_tf_dataset(training_gen)
+        val_ds = get_tf_dataset(validating_gen)
+
         early_stopping = EarlyStopping(
             monitor='val_classifier_accuracy',
             patience=patience,
@@ -179,13 +183,13 @@ def train_network(prefix, es):
             verbose=1,
         )
         history = model.fit(
-            training_gen,
+            train_ds,
             batch_size=batch_size,
             epochs=epochs,
-            validation_data=validating_gen,
+            validation_data=val_ds,
             callbacks=[early_stopping],
-            workers=num_workers,  # Use multiple CPU cores for data prep
-            use_multiprocessing=True,  # True if your generator is thread-safe
+            # workers=num_workers,
+            # use_multiprocessing=True,
             verbose=2,
         )
         histories.append(history)
