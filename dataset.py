@@ -156,6 +156,7 @@ def _load_dataset(path):
 
 def _save_dataset_as_hdf5(data, labels, path):
     """Saves the balanced, shuffled data into a permanent HDF5 container."""
+    data, labels = _shuffle_dataset(data, labels)
     hdf5_fname = os.path.join(path, constants.prep_hdf5_fname)
     print(f'Creating HDF5 dataset at {hdf5_fname}...')
 
@@ -216,10 +217,10 @@ def _load_quickdraw(path):
     labels = np.concatenate(labels_list, axis=0)
 
     print(f'Loaded a total of {data.shape[0]} images of {len(label_dict)} classes.')
-    return shuffle_dataset(data, labels)
+    return data, labels
 
 
-def shuffle_dataset(data, labels):
+def _shuffle_dataset(data, labels):
     print('Shuffling the dataset before storing it...')
     # 1. Create an array of indices [0, 1, 2, ..., N-1]
     indices = np.arange(data.shape[0])
@@ -288,7 +289,7 @@ class QuickDrawGenerator(Sequence):
         # 2. Categorical Conversion (Issue #1)
         if self.categorical:
             # Converts integer labels to one-hot vectors
-            y = keras.utils.to_categorical(y, num_classes=self.num_classes)
+            y = keras.utils.to_categorical(y, num_classes=constants.n_labels)
 
         # Match your multi-head requirement
         return x, {'classifier': y, 'decoder': x}
