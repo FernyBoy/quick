@@ -124,12 +124,10 @@ def _get_segment(
         p, q = k, m
     elif segment == _TESTING_SEGMENT:
         p, q = m, n
-    # Create the index range for this segment
-    segment_indices = np.arange(p, q)
 
     return QuickDrawGenerator(
         hdf5_path,
-        segment_indices,
+        p,
         categorical=categorical,
         batch_size=constants.batch_size,
         shuffle=shuffle,
@@ -236,7 +234,7 @@ class QuickDrawGenerator(Sequence):
     def __init__(
         self,
         hdf5_path,
-        indices,
+        start_index,
         categorical=False,
         batch_size=2048,
         shuffle=True,
@@ -245,21 +243,20 @@ class QuickDrawGenerator(Sequence):
     ):
         super().__init__(**kwargs)
         self.hdf5_path = hdf5_path
-        self.indices = indices  # These are the indices for the specific fold/segment
+        self.start_index = start_index  # These are the indices for the specific fold/segment
         self.categorical = categorical
         self.batch_size = batch_size
         self.predict_only = predict_only
         # If predicting, we MUST NOT shuffle to keep track of which embedding belongs to which image
         self.shuffle = shuffle if not predict_only else False
-        self.data_file = (None,)
+        self.data_file = None
         self.on_epoch_end()
 
     def __len__(self):
-        return int(np.ceil(len(self.indices) / self.batch_size))
+        return self.batch_size
 
     def on_epoch_end(self):
-        if self.shuffle:
-            np.random.shuffle(self.indices)
+        pass
 
     def __getitem__(self, idx):
         print(f'Generating data (and labels) for batch {idx}... ', end='')
@@ -270,30 +267,21 @@ class QuickDrawGenerator(Sequence):
             self.data_file = h5py.File(
                 self.hdf5_path, 'r', rdcc_nbytes=nbytes
             )  # 512MB Cache
-
         # Extract the specific indices for this batch
-        batch_indices = self.indices[
-            idx * self.batch_size : (idx + 1) * self.batch_size
-        ]
-
-        # HDF5 performs better with sorted index access
-        sort_map = np.argsort(batch_indices)
-        rev_map = np.argsort(sort_map)
-        sorted_indices = batch_indices[sort_map]
-
-        x = self.data_file['images'][sorted_indices]
+        start = self.start_index + (idx * self.batch_size)
+        end = start + self.batch_size
+        x = self.data_file['images'][start:end]
         # Labels are retrieved only if not in predict-only mode
         if not self.predict_only:
-            y = self.data_file['labels'][sorted_indices]
+            y = self.data_file['labels'][start:end]
         # Normalize to [0, 1], and restore original order
-        x = x[rev_map].astype('float32') / 255.0
+        x = x.astype('float32') / 255.0
 
         if self.predict_only:
             end_time = time.perf_counter()
             elapsed_time = end_time - start_time
             print(f' time: {elapsed_time:.4f} seconds')
             return x  # Just return the images for prediction
-        y = y[rev_map]
 
         # 2. Categorical Conversion (Issue #1)
         if self.categorical:
