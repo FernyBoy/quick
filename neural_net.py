@@ -129,6 +129,8 @@ def train_network(prefix, es):
     confusion_matrix = np.zeros((constants.n_labels, constants.n_labels))
     histories = []
     for fold in range(constants.n_folds):
+        print(f'FOLD: {fold}')
+        print('Getting the dataset ready...')
         training_gen = dataset.get_training(fold, categorical=True)
         # No shuffling is needed for validation nor testing.
         validating_gen = dataset.get_validating(fold, categorical=True, shuffle=False)
@@ -139,6 +141,7 @@ def train_network(prefix, es):
         strategy = tf.distribute.MirroredStrategy()
         with strategy.scope():
             domain = constants.domain
+            print('Building and compiling the neural network...')
             input_data = Input(shape=(dataset.rows, dataset.columns, 1))
             input_enc, output_enc = get_encoder(domain)
             input_class, output_class = get_classifier(domain)
@@ -171,30 +174,26 @@ def train_network(prefix, es):
             )
             # autoencoder = Model(inputs=input_data, outputs=decoded, name='autoencoder')
 
-        # Wrap the generators as tf.data.Dataset for better performance
-        train_ds = get_tf_dataset(training_gen)
-        val_ds = get_tf_dataset(validating_gen)
-
+        print('Training the neural network...')
         early_stopping = EarlyStopping(
             monitor='val_classifier_accuracy',
             patience=patience,
             restore_best_weights=True,
-            mode='min',
-            verbose=1,
+            mode='max',
+            verbose=2,
         )
         history = model.fit(
-            train_ds,
+            training_gen,
             batch_size=batch_size,
             epochs=epochs,
-            validation_data=val_ds,
+            validation_data=validating_gen,
             callbacks=[early_stopping],
-            # workers=num_workers,
-            # use_multiprocessing=True,
             verbose=2,
         )
         histories.append(history)
         history = model.evaluate(testing_gen, return_dict=True)
         histories.append(history)
+        print('Creating the confusion matrix...')
         predicted_labels = np.argmax(full_classifier.predict(predict_gen), axis=1)
         # Retrieve True Labels directly from HDF5 using generator indices
         with h5py.File(predict_gen.hdf5_path, 'r') as f:
@@ -204,6 +203,7 @@ def train_network(prefix, es):
             predicted_labels,
             num_classes=constants.n_labels,
         )
+        print('Saving everything needed for the future...')
         encoder.save(constants.encoder_filename(prefix, es, fold))
         decoder.save(constants.decoder_filename(prefix, es, fold))
         classifier.save(constants.classifier_filename(prefix, es, fold))
@@ -239,8 +239,6 @@ def obtain_features(model_prefix, features_prefix, labels_prefix, data_prefix, e
             print(f'Generating features for {suffix}...')
             features = model.predict(
                 gen,
-                workers=num_workers,
-                use_multiprocessing=True,
                 verbose=1,
             )
 
@@ -264,28 +262,3 @@ def obtain_features(model_prefix, features_prefix, labels_prefix, data_prefix, e
             np.save(data_filename, data)
             np.save(features_filename, features)
             np.save(labels_filename, labels)
-
-
-def get_tf_dataset(generator):
-    output_signature = (
-        tf.TensorSpec(
-            shape=(None, dataset.rows, dataset.columns, 1), dtype=tf.float32
-        ),  # Images
-        {
-            'classifier': tf.TensorSpec(
-                shape=(None, constants.n_labels), dtype=tf.float32
-            ),
-            'decoder': tf.TensorSpec(
-                shape=(None, dataset.rows, dataset.columns, 1), dtype=tf.float32
-            ),
-        },
-    )
-    dataset = tf.data.Dataset.from_generator(
-        lambda: generator, output_signature=output_signature
-    )
-
-    # CRITICAL for dual L4 performance:
-    # Prefetch prepares batch N+1 while GPUs are computing batch N
-    dataset = dataset.prefetch(tf.data.AUTOTUNE)
-
-    return dataset
