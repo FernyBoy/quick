@@ -64,21 +64,21 @@ encoder_nlayers = 40
 
 
 def get_encoder(domain):
-    dropout = 0.5
+    dropout = 0.2
     input_data = Input(shape=(dataset.rows, dataset.columns, 1))
     filters = domain // 16
     output = conv_block(input_data, 2, filters, dropout, first_block=True)
     filters *= 2
-    dropout -= 0.05
+    dropout -= 0.025
     output = conv_block(output, 2, filters, dropout)
     filters *= 2
-    dropout -= 0.05
+    dropout -= 0.025
     output = conv_block(output, 3, filters, dropout)
     filters *= 2
-    dropout -= 0.05
+    dropout -= 0.025
     output = conv_block(output, 3, filters, dropout)
     filters *= 2
-    dropout -= 0.05
+    dropout -= 0.025
     output = conv_block(output, 3, filters, dropout)
     output = Flatten()(output)
     output = LayerNormalization(name='encoded')(output)
@@ -112,7 +112,10 @@ classifier_nlayers = 6
 
 def get_classifier(domain):
     input_mem = Input(shape=(domain,))
-    dense = Dense(domain, activation='relu')(input_mem)
+    # Uses LeakyReLU or ELU, as they allow negative values to pass through,
+    # so the classifier can "see" the full latent space.
+    dense = Dense(domain)(input_mem)
+    dense = tf.keras.layers.LeakyReLU(alpha=0.1)(dense)
     drop = Dropout(0.4)(dense)
     dense = Dense(domain, activation='relu')(drop)
     drop = Dropout(0.4)(dense)
@@ -157,7 +160,7 @@ def train_network(prefix, es):
             model.compile(
                 loss=['categorical_crossentropy', 'mean_squared_error'],
                 optimizer=tf.keras.optimizers.Adam(
-                    learning_rate=2e-2
+                    learning_rate=1e-3
                 ),  # Learning rate for a batch size of 2048
                 metrics={'classifier': 'accuracy', 'decoder': rmse},
             )

@@ -85,7 +85,8 @@ learning_suffixes = [
 domain = 256
 n_folds = 1
 n_jobs = 1
-# Batch size is set considering 2 L4 GPUs with 24 GB of RAM each.
+# Batch size is set considering over 7 million elements of data and
+# 2 L4 GPUs with 24 GB of RAM each.
 # It should be a power of two.
 batch_size = 2048
 dreaming_cycles = 6
