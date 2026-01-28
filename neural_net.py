@@ -36,8 +36,6 @@ import dataset
 epochs = 300
 patience = 10
 truly_training_percentage = 0.80
-# Batch size and the number of workers are adjusted to having 2 L4 GPUs.
-num_workers = 12  # Number of CPU cores for data prep
 
 
 def conv_block(entry, layers, filters, dropout, first_block=False):

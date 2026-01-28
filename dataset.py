@@ -115,7 +115,6 @@ def _get_segment(
     k = k % total_size
     m = m % total_size
     n = n % total_size
-    p, q = None, None
     if segment == _TRAINING_SEGMENT:
         p, q = i, j
     elif segment == _VALIDATING_SEGMENT:
@@ -125,9 +124,13 @@ def _get_segment(
     elif segment == _TESTING_SEGMENT:
         p, q = m, n
 
+    if p < q:
+        segments = [(p, q)]
+    else:
+        segments = [(p, total_size), (0, q)]
     return QuickDrawGenerator(
         hdf5_path,
-        p,
+        segments,
         categorical=categorical,
         batch_size=constants.batch_size,
         shuffle=shuffle,
@@ -234,7 +237,7 @@ class QuickDrawGenerator(Sequence):
     def __init__(
         self,
         hdf5_path,
-        start_index,
+        segments,
         categorical=False,
         batch_size=2048,
         shuffle=True,
@@ -243,12 +246,12 @@ class QuickDrawGenerator(Sequence):
     ):
         super().__init__(**kwargs)
         self.hdf5_path = hdf5_path
-        self.start_index = start_index  # These are the indices for the specific fold/segment
+        self.segments = segments
         self.categorical = categorical
         self.batch_size = batch_size
+        self.shuffle = shuffle and not predict_only
         self.predict_only = predict_only
-        # If predicting, we MUST NOT shuffle to keep track of which embedding belongs to which image
-        self.shuffle = shuffle if not predict_only else False
+        self.total_samples = sum(end - start for start, end in self.segments)
         self.data_file = None
         self.on_epoch_end()
 
@@ -268,13 +271,10 @@ class QuickDrawGenerator(Sequence):
                 self.hdf5_path, 'r', rdcc_nbytes=nbytes
             )  # 512MB Cache
         # Extract the specific indices for this batch
-        start = self.start_index + (idx * self.batch_size)
-        end = start + self.batch_size
-        x = self.data_file['images'][start:end]
-        # Labels are retrieved only if not in predict-only mode
-        if not self.predict_only:
-            y = self.data_file['labels'][start:end]
-        # Normalize to [0, 1], and restore original order
+        start = idx * self.batch_size
+        # Retrieves what remains if it is not a full batch
+        count = min(self.batch_size, self.total_samples - start)
+        x, y = self._get_data_from_h5(start, count)
         x = x.astype('float32') / 255.0
 
         if self.predict_only:
@@ -283,6 +283,8 @@ class QuickDrawGenerator(Sequence):
             print(f' time: {elapsed_time:.4f} seconds')
             return x  # Just return the images for prediction
 
+        if self.shuffle:
+            x, y = _shuffle_dataset(x, y)
         # 2. Categorical Conversion (Issue #1)
         if self.categorical:
             # Converts integer labels to one-hot vectors
@@ -292,3 +294,39 @@ class QuickDrawGenerator(Sequence):
         elapsed_time = end_time - start_time
         print(f' time: {elapsed_time:.4f} seconds')
         return x, {'classifier': y, 'decoder': x}
+
+    def _get_data_from_h5(self, start, count):
+        """Helper to fetch a slice by jumping through the ranges."""
+        remaining = count
+        current = start
+        results_x = []
+        results_y = []
+
+        for s_start, s_end in self.segments:
+            range_len = s_end - s_start
+
+            if current < range_len:
+                # How much can we take from this specific range?
+                take = min(remaining, range_len - current)
+
+                # Physical slice in the H5 file
+                h5_start = s_start + current
+                h5_end = h5_start + take
+
+                results_x.append(self.f['images'][h5_start:h5_end])
+                if not self.predict_only:
+                    results_y.append(self.f['labels'][h5_start:h5_end])
+
+                remaining -= take
+                current = 0  # Next range starts from its beginning
+            else:
+                # Skips this range entirely
+                current -= range_len
+
+            if remaining <= 0:
+                break
+
+        # Combine the chunks (only happens at the 'gap' boundary)
+        x = np.concatenate(results_x, axis=0)
+        y = np.concatenate(results_y, axis=0) if not self.predict_only else None
+        return x, y
