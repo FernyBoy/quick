@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import time
 import numpy as np
 import os
 import random
@@ -246,7 +247,9 @@ class QuickDrawGenerator(Sequence):
         batch_size=2048,
         shuffle=True,
         predict_only=False,
+        **kwargs,
     ):
+        super().__init__(**kwargs)
         self.hdf5_path = hdf5_path
         self.indices = indices  # These are the indices for the specific fold/segment
         self.categorical = categorical
@@ -264,6 +267,8 @@ class QuickDrawGenerator(Sequence):
             np.random.shuffle(self.indices)
 
     def __getitem__(self, idx):
+        print(f'Generating data (and labels) for batch {idx}... ', end='')
+        start_time = time.perf_counter()
         # Extract the specific indices for this batch
         batch_indices = self.indices[
             idx * self.batch_size : (idx + 1) * self.batch_size
@@ -280,9 +285,12 @@ class QuickDrawGenerator(Sequence):
             if not self.predict_only:
                 y = f['labels'][sorted_indices]
         # Reshape to (Batch, 28, 28, 1), normalize to [0, 1], and restore original order
-        x = x[rev_map].reshape(-1, 28, 28, 1).astype('float32') / 255.0
+        x = x[rev_map].astype('float32') / 255.0
 
         if self.predict_only:
+            end_time = time.perf_counter()
+            elapsed_time = end_time - start_time
+            print(f" time: {elapsed_time:.4f} seconds")
             return x  # Just return the images for prediction
         y = y[rev_map]
 
@@ -291,5 +299,7 @@ class QuickDrawGenerator(Sequence):
             # Converts integer labels to one-hot vectors
             y = keras.utils.to_categorical(y, num_classes=constants.n_labels)
 
-        # Match your multi-head requirement
+        end_time = time.perf_counter()
+        elapsed_time = end_time - start_time
+        print(f" time: {elapsed_time:.4f} seconds")
         return x, {'classifier': y, 'decoder': x}
