@@ -217,14 +217,12 @@ def _load_quickdraw(path):
 
 
 def _shuffle_dataset(data, labels):
-    print('Shuffling the dataset before storing it...')
     # 1. Create an array of indices [0, 1, 2, ..., N-1]
     indices = np.arange(data.shape[0])
 
     # 2. Shuffle the indices in-place (very fast, low memory)
     np.random.shuffle(indices)
 
-    print('Reordering arrays...')
     # 3. Use 'fancy indexing' to reorder both arrays in one go
     # This creates a new shuffled array.
     # For 7M images (uint8), this uses ~5.5GB of RAM temporarily.
@@ -256,14 +254,12 @@ class QuickDrawGenerator(Sequence):
         self.on_epoch_end()
 
     def __len__(self):
-        return self.batch_size
+        return int(np.ceil(self.total_samples / self.batch_size))
 
     def on_epoch_end(self):
         pass
 
     def __getitem__(self, idx):
-        print(f'Generating data (and labels) for batch {idx}... ', end='')
-        start_time = time.perf_counter()
         # Lazy initialization
         if self.data_file is None:
             nbytes = (constants.batch_size // 2) ** 2 * (constants.batch_size // 4)
@@ -278,21 +274,13 @@ class QuickDrawGenerator(Sequence):
         x = x.astype('float32') / 255.0
 
         if self.predict_only:
-            end_time = time.perf_counter()
-            elapsed_time = end_time - start_time
-            print(f' time: {elapsed_time:.4f} seconds')
             return x  # Just return the images for prediction
-
         if self.shuffle:
             x, y = _shuffle_dataset(x, y)
         # 2. Categorical Conversion (Issue #1)
         if self.categorical:
             # Converts integer labels to one-hot vectors
             y = keras.utils.to_categorical(y, num_classes=constants.n_labels)
-
-        end_time = time.perf_counter()
-        elapsed_time = end_time - start_time
-        print(f' time: {elapsed_time:.4f} seconds')
         return x, {'classifier': y, 'decoder': x}
 
     def _get_data_from_h5(self, start, count):
@@ -313,9 +301,9 @@ class QuickDrawGenerator(Sequence):
                 h5_start = s_start + current
                 h5_end = h5_start + take
 
-                results_x.append(self.f['images'][h5_start:h5_end])
+                results_x.append(self.data_file['images'][h5_start:h5_end])
                 if not self.predict_only:
-                    results_y.append(self.f['labels'][h5_start:h5_end])
+                    results_y.append(self.data_file['labels'][h5_start:h5_end])
 
                 remaining -= take
                 current = 0  # Next range starts from its beginning
