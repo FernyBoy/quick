@@ -25,9 +25,6 @@ import constants
 columns = 28
 rows = 28
 
-# Default batch size for generators
-default_batch_size = 2048
-
 _TRAINING_SEGMENT = 0
 _VALIDATING_SEGMENT = 1
 _FILLING_SEGMENT = 2
@@ -37,7 +34,6 @@ _TESTING_SEGMENT = 3
 def get_training(
     fold,
     categorical=False,
-    batch_size=default_batch_size,
     shuffle=True,
     predict_only=False,
 ):
@@ -45,7 +41,6 @@ def get_training(
         _TRAINING_SEGMENT,
         fold,
         categorical,
-        batch_size=batch_size,
         shuffle=shuffle,
         predict_only=predict_only,
     )
@@ -54,7 +49,6 @@ def get_training(
 def get_validating(
     fold,
     categorical=False,
-    batch_size=default_batch_size,
     shuffle=True,
     predict_only=False,
 ):
@@ -62,17 +56,15 @@ def get_validating(
         _VALIDATING_SEGMENT,
         fold,
         categorical,
-        batch_size=batch_size,
         shuffle=shuffle,
         predict_only=predict_only,
     )
 
 
-def get_filling(fold, batch_size=default_batch_size, shuffle=True, predict_only=False):
+def get_filling(fold, shuffle=True, predict_only=False):
     return _get_segment(
         _FILLING_SEGMENT,
         fold,
-        batch_size=batch_size,
         shuffle=shuffle,
         predict_only=predict_only,
     )
@@ -81,7 +73,6 @@ def get_filling(fold, batch_size=default_batch_size, shuffle=True, predict_only=
 def get_testing(
     fold,
     categorical=False,
-    batch_size=default_batch_size,
     shuffle=True,
     predict_only=False,
 ):
@@ -89,7 +80,6 @@ def get_testing(
         _TESTING_SEGMENT,
         fold,
         categorical=categorical,
-        batch_size=batch_size,
         shuffle=shuffle,
         predict_only=predict_only,
     )
@@ -99,7 +89,6 @@ def _get_segment(
     segment,
     fold,
     categorical=False,
-    batch_size=default_batch_size,
     shuffle=True,
     predict_only=False,
 ):
@@ -142,7 +131,7 @@ def _get_segment(
         hdf5_path,
         segment_indices,
         categorical=categorical,
-        batch_size=batch_size,
+        batch_size=constants.batch_size,
         shuffle=shuffle,
         predict_only=predict_only,
     )
@@ -164,7 +153,12 @@ def _save_dataset_as_hdf5(data, labels, path):
     with h5py.File(hdf5_fname, 'w') as f:
         # We store as uint8 (0-255) to save disk space (7M images = ~5.5GB)
         # If we stored as float32, it would be ~22GB!
-        f.create_dataset('images', data=data.astype('uint8'), compression='gzip')
+        f.create_dataset(
+            'images',
+            data=data.astype('uint8'),
+            chunks=(constants.batch_size, 28, 28),  # Store data in batch-sized blocks
+            compression='gzip',
+        )
         f.create_dataset('labels', data=labels.astype('int32'))
     print('HDF5 creation complete.')
 
@@ -257,6 +251,7 @@ class QuickDrawGenerator(Sequence):
         self.predict_only = predict_only
         # If predicting, we MUST NOT shuffle to keep track of which embedding belongs to which image
         self.shuffle = shuffle if not predict_only else False
+        self.data_file = (None,)
         self.on_epoch_end()
 
     def __len__(self):
@@ -269,6 +264,13 @@ class QuickDrawGenerator(Sequence):
     def __getitem__(self, idx):
         print(f'Generating data (and labels) for batch {idx}... ', end='')
         start_time = time.perf_counter()
+        # Lazy initialization
+        if self.data_file is None:
+            nbytes = (constants.batch_size // 2) ** 2 * (constants.batch_size // 4)
+            self.data_file = h5py.File(
+                self.hdf5_path, 'r', rdcc_nbytes=nbytes
+            )  # 512MB Cache
+
         # Extract the specific indices for this batch
         batch_indices = self.indices[
             idx * self.batch_size : (idx + 1) * self.batch_size
@@ -279,18 +281,17 @@ class QuickDrawGenerator(Sequence):
         rev_map = np.argsort(sort_map)
         sorted_indices = batch_indices[sort_map]
 
-        with h5py.File(self.hdf5_path, 'r') as f:
-            x = f['images'][sorted_indices]
-            # Labels are retrieved only if not in predict-only mode
-            if not self.predict_only:
-                y = f['labels'][sorted_indices]
-        # Reshape to (Batch, 28, 28, 1), normalize to [0, 1], and restore original order
+        x = self.data_file['images'][sorted_indices]
+        # Labels are retrieved only if not in predict-only mode
+        if not self.predict_only:
+            y = self.data_file['labels'][sorted_indices]
+        # Normalize to [0, 1], and restore original order
         x = x[rev_map].astype('float32') / 255.0
 
         if self.predict_only:
             end_time = time.perf_counter()
             elapsed_time = end_time - start_time
-            print(f" time: {elapsed_time:.4f} seconds")
+            print(f' time: {elapsed_time:.4f} seconds')
             return x  # Just return the images for prediction
         y = y[rev_map]
 
@@ -301,5 +302,5 @@ class QuickDrawGenerator(Sequence):
 
         end_time = time.perf_counter()
         elapsed_time = end_time - start_time
-        print(f" time: {elapsed_time:.4f} seconds")
+        print(f' time: {elapsed_time:.4f} seconds')
         return x, {'classifier': y, 'decoder': x}

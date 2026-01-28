@@ -38,7 +38,6 @@ patience = 10
 truly_training_percentage = 0.80
 # Batch size and the number of workers are adjusted to having 2 L4 GPUs.
 num_workers = 12  # Number of CPU cores for data prep
-batch_size = 2048
 
 
 def conv_block(entry, layers, filters, dropout, first_block=False):
@@ -184,7 +183,7 @@ def train_network(prefix, es):
         )
         history = model.fit(
             training_gen,
-            batch_size=batch_size,
+            batch_size=constants.batch_size,
             epochs=epochs,
             validation_data=validating_gen,
             callbacks=[early_stopping],
