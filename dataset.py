@@ -325,9 +325,9 @@ class QuickDrawGenerator(Sequence):
             self.data_file = h5py.File(self.hdf5_path, 'r', swmr=True)
 
         label_chunks = []
-        for r_start, r_end in self.ranges:
+        for start, end in self.segments:
             # We slice ONLY the labels dataset
-            label_chunks.append(self.data_file['labels'][r_start:r_end])
+            label_chunks.append(self.data_file['labels'][start:end])
 
         all_labels = np.concatenate(label_chunks, axis=0)
 

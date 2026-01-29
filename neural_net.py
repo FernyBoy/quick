@@ -30,7 +30,7 @@ from keras.layers import (
     LayerNormalization,
     SpatialDropout2D,
 )
-from keras.callbacks import EarlyStopping
+from keras.callbacks import EarlyStopping, ReduceLROnPlateau
 import constants
 import dataset
 
@@ -65,21 +65,21 @@ encoder_nlayers = 40
 
 
 def get_encoder(domain):
-    dropout = 0.2
+    dropout = 0.1
     input_data = Input(shape=(dataset.rows, dataset.columns, 1))
     filters = domain // 16
     output = conv_block(input_data, 2, filters, dropout, first_block=True)
     filters *= 2
-    dropout -= 0.025
+    dropout += 0.025
     output = conv_block(output, 2, filters, dropout)
     filters *= 2
-    dropout -= 0.025
+    dropout += 0.025
     output = conv_block(output, 3, filters, dropout)
     filters *= 2
-    dropout -= 0.025
+    dropout += 0.025
     output = conv_block(output, 3, filters, dropout)
     filters *= 2
-    dropout -= 0.025
+    dropout += 0.025
     output = conv_block(output, 3, filters, dropout)
     output = Flatten()(output)
     output = LayerNormalization(name='encoded')(output)
@@ -92,7 +92,7 @@ def get_decoder(domain):
     filters = domain // 8
     dense = Dense(width * width * filters, activation='relu')(input_mem)
     output = Reshape((width, width, filters))(dense)
-    dropout = 0.4
+    dropout = 0.2
     for i in range(2):
         trans = Conv2DTranspose(
             kernel_size=3, strides=2, padding='same', activation='relu', filters=filters
@@ -115,15 +115,18 @@ def get_classifier(domain):
     input_mem = Input(shape=(domain,))
     # Uses LeakyReLU or ELU, as they allow negative values to pass through,
     # so the classifier can "see" the full latent space.
-    dense = Dense(2 * domain)(input_mem)
+    dense = Dense(4 * domain)(input_mem)
     dense = LeakyReLU(alpha=0.1)(dense)
-    drop = Dropout(0.4)(dense)
+    drop = Dropout(0.2)(dense)
+    dense = Dense(2 * domain)(drop)
+    dense = LeakyReLU(alpha=0.1)(dense)
+    drop = Dropout(0.2)(dense)
     dense = Dense(domain)(drop)
     dense = LeakyReLU(alpha=0.1)(dense)
-    drop = Dropout(0.4)(dense)
+    drop = Dropout(0.2)(dense)
     dense = Dense(domain // 2)(drop)
     dense = LeakyReLU(alpha=0.1)(dense)
-    drop = Dropout(0.4)(dense)
+    drop = Dropout(0.2)(dense)
     classification = Dense(constants.n_labels, activation='softmax', name='classified')(
         drop
     )
@@ -167,7 +170,7 @@ def train_network(prefix, es):
                 optimizer=tf.keras.optimizers.Adam(
                     learning_rate=1e-3
                 ),  # Learning rate for a batch size of 2048
-                loss_weights={'classifier': 0.1, 'decoder': 1.0},
+                loss_weights={'classifier': 1, 'decoder': 0.5},
                 metrics={'classifier': 'accuracy', 'decoder': rmse},
             )
             encoder.summary()
@@ -188,12 +191,21 @@ def train_network(prefix, es):
             mode='max',
             verbose=2,
         )
+
+        lr_reducer = ReduceLROnPlateau(
+            monitor='val_classifier_accuracy',
+            factor=0.2,
+            patience=patience // 2,
+            min_lr=1e-6,
+            verbose=1,
+        )
+
         history = model.fit(
             training_gen,
             # batch_size=constants.batch_size,
             epochs=epochs,
             validation_data=validating_gen,
-            callbacks=[early_stopping],
+            callbacks=[early_stopping, lr_reducer],
             verbose=2,
         )
         histories.append(history)
