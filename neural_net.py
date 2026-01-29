@@ -89,7 +89,7 @@ def get_encoder(domain):
 def get_decoder(domain):
     input_mem = Input(shape=(domain,))
     width = dataset.columns // 4
-    filters = domain // 4
+    filters = domain // 8
     dense = Dense(width * width * filters, activation='relu')(input_mem)
     output = Reshape((width, width, filters))(dense)
     dropout = 0.4
@@ -99,7 +99,7 @@ def get_decoder(domain):
         )(output)
         output = SpatialDropout2D(dropout)(trans)
         dropout /= 2.0
-        filters = filters // (constants.domain // 32)
+        filters = filters // (constants.domain // 64)
         output = BatchNormalization()(output)
     output = Conv2DTranspose(
         filters=filters, kernel_size=3, strides=1, activation='sigmoid', padding='same'
