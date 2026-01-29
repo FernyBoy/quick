@@ -22,6 +22,7 @@ from keras.layers import (
     MaxPool2D,
     Dropout,
     Dense,
+    LeakyReLU,
     Flatten,
     Reshape,
     Conv2DTranspose,
@@ -114,10 +115,14 @@ def get_classifier(domain):
     input_mem = Input(shape=(domain,))
     # Uses LeakyReLU or ELU, as they allow negative values to pass through,
     # so the classifier can "see" the full latent space.
-    dense = Dense(domain)(input_mem)
-    dense = tf.keras.layers.LeakyReLU(alpha=0.1)(dense)
+    dense = Dense(2*domain)(input_mem)
+    dense = LeakyReLU(alpha=0.1)(dense)
     drop = Dropout(0.4)(dense)
-    dense = Dense(domain, activation='relu')(drop)
+    dense = Dense(domain)(drop)
+    dense = LeakyReLU(alpha=0.1)(dense)
+    drop = Dropout(0.4)(dense)
+    dense = Dense(domain//2)(drop)
+    dense = LeakyReLU(alpha=0.1)(dense)
     drop = Dropout(0.4)(dense)
     classification = Dense(constants.n_labels, activation='softmax', name='classified')(
         drop
@@ -162,6 +167,7 @@ def train_network(prefix, es):
                 optimizer=tf.keras.optimizers.Adam(
                     learning_rate=1e-3
                 ),  # Learning rate for a batch size of 2048
+                loss_weights={'classifier': 0.1, 'decoder': 1.0},
                 metrics={'classifier': 'accuracy', 'decoder': rmse},
             )
             encoder.summary()
