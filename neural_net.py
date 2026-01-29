@@ -115,13 +115,13 @@ def get_classifier(domain):
     input_mem = Input(shape=(domain,))
     # Uses LeakyReLU or ELU, as they allow negative values to pass through,
     # so the classifier can "see" the full latent space.
-    dense = Dense(2*domain)(input_mem)
+    dense = Dense(2 * domain)(input_mem)
     dense = LeakyReLU(alpha=0.1)(dense)
     drop = Dropout(0.4)(dense)
     dense = Dense(domain)(drop)
     dense = LeakyReLU(alpha=0.1)(dense)
     drop = Dropout(0.4)(dense)
-    dense = Dense(domain//2)(drop)
+    dense = Dense(domain // 2)(drop)
     dense = LeakyReLU(alpha=0.1)(dense)
     drop = Dropout(0.4)(dense)
     classification = Dense(constants.n_labels, activation='softmax', name='classified')(
@@ -190,7 +190,7 @@ def train_network(prefix, es):
         )
         history = model.fit(
             training_gen,
-            batch_size=constants.batch_size,
+            # batch_size=constants.batch_size,
             epochs=epochs,
             validation_data=validating_gen,
             callbacks=[early_stopping],
@@ -202,8 +202,7 @@ def train_network(prefix, es):
         print('Creating the confusion matrix...')
         predicted_labels = np.argmax(full_classifier.predict(predict_gen), axis=1)
         # Retrieve True Labels directly from HDF5 using generator indices
-        with h5py.File(predict_gen.hdf5_path, 'r') as f:
-            true_labels = f['labels'][predict_gen.indices]
+        true_labels = predict_gen.get_all_labels()
         confusion_matrix += tf.math.confusion_matrix(
             true_labels,
             predicted_labels,

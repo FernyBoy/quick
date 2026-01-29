@@ -318,3 +318,23 @@ class QuickDrawGenerator(Sequence):
         x = np.concatenate(results_x, axis=0)
         y = np.concatenate(results_y, axis=0) if not self.predict_only else None
         return x, y
+
+    def get_all_labels(self):
+        """Efficiently retrieves all labels without loading a single image."""
+        if self.data_file is None:
+            self.data_file = h5py.File(self.hdf5_path, 'r', swmr=True)
+
+        label_chunks = []
+        for r_start, r_end in self.ranges:
+            # We slice ONLY the labels dataset
+            label_chunks.append(self.data_file['labels'][r_start:r_end])
+
+        all_labels = np.concatenate(label_chunks, axis=0)
+
+        # No shuffling is performed here, as the order matters for evaluation
+        if self.categorical:
+            return keras.utils.to_categorical(
+                all_labels, num_classes=constants.n_labels
+            )
+
+        return all_labels
