@@ -26,6 +26,7 @@ data_path = 'data/quick'
 run_path = 'runs'
 idx_digits = 3
 prep_hdf5_fname = 'prep_dataset.h5'
+prep_names_fname = 'prep_names.csv'
 
 image_path = 'images'
 testing_path = 'test'

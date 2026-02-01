@@ -170,6 +170,7 @@ def _load_quickdraw(path):
     Returns:
         data: ndarray of shape (N, 28, 28)
         labels: ndarray of integers of shape (N,)
+    It saves the label mapping in CSV file.
     """
     print('Loading QuickDraw .npy files...')
     files = [f for f in os.listdir(path) if f.endswith('.npy')]
@@ -183,17 +184,17 @@ def _load_quickdraw(path):
     files = files[: constants.n_labels]
     data_list = []
     labels_list = []
-    label_dict = {}
+    label_names = []
     minimum_images = -1
     temp_data_list = []
     temp_labels_list = []
 
     for label_index, filename in enumerate(files):
         full_path = os.path.join(path, filename)
-        class_name = filename.replace('full_numpy_bitmap_', '').replace('.npy', '')
-        label_dict[label_index] = class_name
+        name = filename.replace('full_numpy_bitmap_', '').replace('.npy', '')
+        label_names.append(name)
 
-        print(f'Loading {class_name} from {full_path}...')
+        print(f'Loading {name} from {full_path}...')
         images = np.load(full_path)
         if minimum_images == -1:
             minimum_images = images.shape[0]
@@ -204,6 +205,10 @@ def _load_quickdraw(path):
         temp_data_list.append(images)
         temp_labels_list.append(np.full(len(images), label_index, dtype=int))
 
+    csv_path = os.path.join(constants.data_path, constants.prep_names_fname)
+    with open(csv_path, 'w') as file:
+        file.write('\n'.join(label_names))
+
     print(f'Balancing the dataset to {minimum_images} per class')
     for data, labels in zip(temp_data_list, temp_labels_list):
         data_list.append(data[:minimum_images])
@@ -212,7 +217,7 @@ def _load_quickdraw(path):
     data = np.concatenate(data_list, axis=0)
     labels = np.concatenate(labels_list, axis=0)
 
-    print(f'Loaded a total of {data.shape[0]} images of {len(label_dict)} classes.')
+    print(f'Loaded a total of {data.shape[0]} images of {len(label_names)} classes.')
     return data, labels
 
 
