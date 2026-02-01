@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
 import numpy as np
 import h5py
 import tensorflow as tf
@@ -81,15 +82,34 @@ def get_encoder(domain):
     filters *= 2
     dropout += 0.025
     output = conv_block(output, 3, filters, dropout)
-    output = Flatten()(output)
-    output = LayerNormalization(name='encoded')(output)
+
+    # --- THE FEATURE BOOSTER ---
+    # We add a 2*domain-filter block here to capture fine-grained textures.
+    # But we DO NOT increase the final domain size.
+    dropout *= 2.0
+    output = Conv2D(2 * domain, kernel_size=3, padding='same', activation='relu')(
+        output
+    )
+    output = BatchNormalization()(output)
+    output = SpatialDropout2D(0.4)(output)  # High dropout to prevent memorizing noise
+    # --------------------------------------
+
+    output = Flatten()(output)  # 2*domain
+    output = Dense(constants.domain, name='domain_layer')(output)  # STILL 256
+    output = LayerNormalization()(output)
     return input_data, output
 
 
 def get_decoder(domain):
+    n = int(math.log2(domain))
+    remainer = 3 if (n % 2 != 0) else 2
+    initial_divisor = 2 * remainer
+    iter_divisor = 2 ** ((n - remainer) // 2)
+
     input_mem = Input(shape=(domain,))
+    # With is going to be multiplied by two by each Conv2DTranspose layer in the loop.
     width = dataset.columns // 4
-    filters = domain // 8
+    filters = domain // initial_divisor
     dense = Dense(width * width * filters, activation='relu')(input_mem)
     output = Reshape((width, width, filters))(dense)
     dropout = 0.2
@@ -99,7 +119,7 @@ def get_decoder(domain):
         )(output)
         output = SpatialDropout2D(dropout)(trans)
         dropout /= 2.0
-        filters = filters // (constants.domain // 64)
+        filters = filters // iter_divisor
         output = BatchNormalization()(output)
     output = Conv2DTranspose(
         filters=filters, kernel_size=3, strides=1, activation='sigmoid', padding='same'
@@ -136,6 +156,7 @@ def get_classifier(domain):
 def train_network(prefix, es):
     confusion_matrix = np.zeros((constants.n_labels, constants.n_labels))
     histories = []
+    strategy = tf.distribute.MirroredStrategy()
     for fold in range(constants.n_folds):
         print(f'FOLD: {fold}')
         print('Getting the dataset ready...')
@@ -146,7 +167,6 @@ def train_network(prefix, es):
         predict_gen = dataset.get_testing(fold, predict_only=True)
 
         rmse = tf.keras.metrics.RootMeanSquaredError()
-        strategy = tf.distribute.MirroredStrategy()
         with strategy.scope():
             domain = constants.domain
             print('Building and compiling the neural network...')
@@ -156,8 +176,11 @@ def train_network(prefix, es):
             input_dec, output_dec = get_decoder(domain)
 
             encoder = Model(input_enc, output_enc, name='encoder')
+            encoder.summary()
             classifier = Model(input_class, output_class, name='classifier')
+            classifier.summary()
             decoder = Model(input_dec, output_dec, name='decoder')
+            decoder.summary()
             encoded = encoder(input_data)
             decoded = decoder(encoded)
             classified = classifier(encoded)
@@ -173,9 +196,6 @@ def train_network(prefix, es):
                 loss_weights={'classifier': 1, 'decoder': 0.5},
                 metrics={'classifier': 'accuracy', 'decoder': rmse},
             )
-            encoder.summary()
-            classifier.summary()
-            decoder.summary()
             model.summary()
 
             full_classifier = Model(
@@ -197,7 +217,7 @@ def train_network(prefix, es):
             factor=0.2,
             patience=patience // 2,
             min_lr=1e-6,
-            verbose=1,
+            verbose=2,
         )
 
         history = model.fit(

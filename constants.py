@@ -82,7 +82,8 @@ learning_suffixes = [
     [original_suffix, amsystem_suffix],
 ]
 
-# Number of columns in memory
+# Number of columns in memory, which it is also the dimension of the latent representation
+# of the neural networks. It must be a power of two greater than 4.
 domain = 256
 n_folds = 1
 n_jobs = 1
