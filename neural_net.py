@@ -136,16 +136,16 @@ def get_classifier(domain):
     # Uses LeakyReLU or ELU, as they allow negative values to pass through,
     # so the classifier can "see" the full latent space.
     dense = Dense(4 * domain)(input_mem)
-    dense = LeakyReLU(alpha=0.1)(dense)
+    dense = LeakyReLU(negative_slope=0.1)(dense)
     drop = Dropout(0.2)(dense)
     dense = Dense(2 * domain)(drop)
-    dense = LeakyReLU(alpha=0.1)(dense)
+    dense = LeakyReLU(negative_slope=0.1)(dense)
     drop = Dropout(0.2)(dense)
     dense = Dense(domain)(drop)
-    dense = LeakyReLU(alpha=0.1)(dense)
+    dense = LeakyReLU(negative_slope=0.1)(dense)
     drop = Dropout(0.2)(dense)
     dense = Dense(domain // 2)(drop)
-    dense = LeakyReLU(alpha=0.1)(dense)
+    dense = LeakyReLU(negative_slope=0.1)(dense)
     drop = Dropout(0.2)(dense)
     classification = Dense(constants.n_labels, activation='softmax', name='classified')(
         drop
@@ -217,6 +217,7 @@ def train_network(prefix, es):
             factor=0.2,
             patience=patience // 2,
             min_lr=1e-6,
+            mode='max',
             verbose=2,
         )
 
