@@ -17,7 +17,8 @@
 
 Usage:
   eam -h | --help
-  eam (-n | -f | -e <experiment> | -r) [--num-classes=NUM] [--domain=DOMAIN] [--runpath=PATH ] [ -l (en | es) ]
+  eam (-n | -f) [--domain=DOMAIN] [--runpath=PATH ] [ -l (en | es) ]
+  eam (-e <experiment> | -r) [--num-classes=NUM] [--domain=DOMAIN] [--runpath=PATH ] [ -l (en | es) ]
 
 Options:
   -h    Show this screen.
@@ -143,10 +144,10 @@ def plot_responses_graph(
 ):
     response_idxs = [idx for idx in constants.response_behaviours]
     response_labels = [value for value in constants.response_behaviours.values()]
-    means = mean_behaviours[response_idxs]
-    stdvs = stdv_behaviours[response_idxs]
-    means = 100.0 * means / np.sum(means, axis=0)
-    stdvs = 100.0 * stdvs / np.sum(means, axis=0)
+    means = mean_behaviours[:, response_idxs]
+    stdvs = stdv_behaviours[:, response_idxs]
+    means = 100.0 * means / np.sum(means, axis=1)
+    stdvs = 100.0 * stdvs / np.sum(means, axis=1)
 
     plt.clf()
     full_length = 100.0
@@ -352,11 +353,10 @@ def ams_size_results(
     filling_labels,
     testing_labels,
     classifier,
+    threshold,
     es,
 ):
     """Analyze the results of the AMS experiment for the given memory size."""
-    print('--------------------------------------------')
-    print(f'n_labels = {constants.n_labels}')
 
     behaviour = np.zeros(constants.n_behaviours, dtype=np.float64)
 
@@ -366,16 +366,6 @@ def ams_size_results(
         msize,
         es,
     )
-    print('--------------------------------------------')
-    print(f'Filling features shape = {filling_features.shape}')
-
-    known_threshold = constants.n_labels
-    if es.experiment_number == 2:
-        known_threshold //= 2
-        print(f'Adjusted known_threshold = {known_threshold}')
-
-        known_labels_mask = filling_labels < known_threshold
-        filling_features = filling_features[known_labels_mask]
     # Round the values after filtering them.
     qd = qudeq.QuDeq(filling_features, percentiles=constants.use_percentiles)
     ff_rounded = qd.quantize(filling_features, msize)
@@ -396,7 +386,7 @@ def ams_size_results(
         msize,
         qd,
         classifier,
-        known_threshold,
+        threshold,
         es,
     )
 
@@ -445,9 +435,12 @@ def test_memory_sizes(domain, es):
 
     for fold in range(constants.n_folds):
         gc.collect()
+        print(f'Fold: {fold}')
+        # Loads the classifier neural network.
         filename = constants.classifier_filename(model_prefix, es, fold)
         classifier = tf.keras.models.load_model(filename)
-        print(f'Fold: {fold}')
+
+        # Loads the full set of features and labels.
         suffix = constants.filling_suffix
         filling_features_filename = constants.features_name(es) + suffix
         filling_features_filename = constants.input_data_filename(
@@ -473,8 +466,27 @@ def test_memory_sizes(domain, es):
         testing_features = np.load(testing_features_filename)
         testing_labels = np.load(testing_labels_filename)
 
-        print(f'Filling data shape: {filling_features.shape}')
-        print(f'Testing data shape: {testing_features.shape}')
+        print('Original data (all labels):')
+        print(f'\tFilling data shape: {filling_features.shape}')
+        print(f'\tTesting data shape: {testing_features.shape}')
+        print(f'\tTotal of labels = {len(np.unique(testing_labels))}')
+
+        # Reduces the original data to only the classes for the current experiment,
+        # given the number of labels.
+        threshold = constants.n_labels
+        mask = testing_labels < threshold
+        testing_labels = testing_labels[mask]
+        testing_features = testing_features[mask]
+        if es.experiment_number == 2:
+            threshold //= 2
+            print(f'Adjusted threshold = {threshold}')
+        mask = filling_labels < threshold
+        filling_labels = filling_labels[mask]
+        filling_features = filling_features[mask]
+        print('Filtered data:')
+        print(f'\tFilling data shape: {filling_features.shape}')
+        print(f'\tTesting data shape: {testing_features.shape}')
+        print(f'\tTotal of labels = {len(np.unique(testing_labels))}')
 
         behaviours = np.zeros((len(constants.memory_sizes), constants.n_behaviours))
         measures = []
@@ -491,6 +503,7 @@ def test_memory_sizes(domain, es):
                 filling_labels,
                 testing_labels,
                 classifier,
+                threshold,
                 es,
             )
             measures.append(results)
@@ -507,7 +520,7 @@ def test_memory_sizes(domain, es):
         all_confrixes.append(confrixes)
         all_behaviours.append(behaviours)
 
-    # Every row is training fold, and every column is a memory size.
+    # Every "row" is training fold, and every column is a memory size.
     all_entropies = np.array(all_entropies)
     all_confrixes = np.array(all_confrixes)
     all_behaviours = np.array(all_behaviours)
@@ -666,28 +679,22 @@ def test_filling_per_fold(mem_size, domain, es, fold):
     testing_features = np.load(testing_features_filename)
     testing_labels = np.load(testing_labels_filename)
 
-    # Filter the data to include only the classes for the current experiment
-    filling_mask = filling_labels < constants.n_labels
-    filling_features = filling_features[filling_mask]
-    filling_labels = filling_labels[filling_mask]
-
-    known_threshold = constants.n_labels
-    print('--------------------------------------------')
-    print(f'known_threshold = {known_threshold}')
-    print('--------------------------------------------')
-
+    # Reduces the original data to only the classes for the current experiment,
+    # given the number of labels.
+    threshold = constants.n_labels
+    mask = testing_labels < threshold
+    testing_labels = testing_labels[mask]
+    testing_features = testing_features[mask]
     if es.experiment_number == 2:
-        known_threshold //= 2
-        print('--------------------------------------------')
-        print(f'Adjusted known_threshold = {known_threshold}')
-        print('--------------------------------------------')
+        threshold //= 2
+        print(f'Adjusted threshold = {threshold}')
+    mask = filling_labels < threshold
+    filling_labels = filling_labels[mask]
+    filling_features = filling_features[mask]
+    print('Filtered data:')
+    print(f'Filling data shape: {filling_features.shape}')
+    print(f'Testing data shape: {testing_features.shape}')
 
-        known_label_mask = filling_labels < known_threshold
-        filling_features = filling_features[known_label_mask]
-    print('--------------------------------------------')
-    print(f'filling labels shape = {filling_labels.shape}')
-    print(f'filling features shape = {filling_features.shape}')
-    print('--------------------------------------------')
     qd = qudeq.QuDeq(filling_features, percentiles=constants.use_percentiles)
     filling_features = qd.quantize(filling_features, mem_size)
     testing_features = qd.quantize(testing_features, mem_size)
@@ -714,7 +721,7 @@ def test_filling_per_fold(mem_size, domain, es, fold):
             testing_labels,
             percent,
             classifier,
-            known_threshold,
+            threshold,
             es,
         )
         # A list of tuples (position, label, features)
@@ -1106,7 +1113,7 @@ def store_dream(dream, label, index, suffix, es, fold):
 
 
 def store_image(filename, array):
-    pixels = array.reshape(dataset.columns, dataset.rows)
+    pixels = array.reshape(dataset.rows, dataset.columns)
     pixels = pixels.round().astype(np.uint8)
     png.from_array(pixels, 'L;8').save(filename)
 
@@ -1142,8 +1149,8 @@ def run_evaluation(es):
     """
     best_memory_sizes = test_memory_sizes(constants.domain, es)
     print(f'Best memory sizes: {best_memory_sizes}')
-    # best_filling_percents = test_memory_fills(constants.domain, best_memory_sizes, es)
-    # save_learned_params(best_memory_sizes, best_filling_percents, es)
+    best_filling_percents = test_memory_fills(constants.domain, best_memory_sizes, es)
+    save_learned_params(best_memory_sizes, best_filling_percents, es)
 
 
 def generate_memories(es):
@@ -1168,8 +1175,11 @@ if __name__ == '__main__':
     num_classes = constants.n_labels
     if args['--num-classes']:
         num_classes = int(args['--num-classes'])
-        assert 0 < num_classes
-        constants.set_n_labels(num_classes)
+        try:
+            constants.set_n_labels(num_classes)
+        except ValueError as e:
+            print(e)
+            sys.exit(1)
 
     # Processing memory size (columns)
     if args['--domain']:

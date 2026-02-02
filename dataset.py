@@ -15,123 +15,152 @@
 import numpy as np
 import os
 import random
-import constants
 import keras
+from keras.utils import Sequence
+import h5py
+import constants
 
 # This code is an abstraction for the Draw Quick! dataset,
 columns = 28
 rows = 28
 
-
-def get_training(fold, categorical=False):
-    return _get_segment(_TRAINING_SEGMENT, fold, categorical)
-
-
-def get_filling(fold):
-    return _get_segment(_FILLING_SEGMENT, fold)
-
-
-def get_testing(fold, categorical=False):
-    return _get_segment(_TESTING_SEGMENT, fold, categorical)
-
-
-def _get_segment(segment, fold, categorical=False):
-    if (_get_segment.data is None) or (_get_segment.labels is None):
-        _get_segment.data, _get_segment.labels = _load_dataset(constants.data_path)
-    total = len(_get_segment.labels)
-    training = total * constants.nn_training_percent
-    filling = total * constants.am_filling_percent
-    testing = total * constants.am_testing_percent
-    step = total / constants.n_folds
-    i = fold * step
-    j = i + training
-    k = j + filling
-    l = k + testing
-    i = int(i)
-    j = int(j) % total
-    k = int(k) % total
-    l = int(l) % total
-    n, m = None, None
-    if segment == _TRAINING_SEGMENT:
-        n, m = i, j
-    elif segment == _FILLING_SEGMENT:
-        n, m = j, k
-    elif segment == _TESTING_SEGMENT:
-        n, m = k, l
-
-    data = constants.get_data_in_range(_get_segment.data, n, m)
-    labels = constants.get_data_in_range(_get_segment.labels, n, m)
-
-    num_classes = np.unique_values(labels).shape[0]
-    if num_classes < constants.n_labels:
-        constants.print_error(
-            f'Only {num_classes} classes found instead of {constants.n_labels}.'
-        )
-        exit(1)
-    elif num_classes > constants.n_labels:
-        constants.print_warning(
-            f'Found {num_classes} classes, but only {constants.n_labels} are used.'
-        )
-        mask = labels < constants.n_labels
-        labels = labels[mask]
-        data = data[mask]
-
-    # Convert labels to one-hot encoding
-    if categorical:
-        labels = keras.utils.to_categorical(labels, num_classes=constants.n_labels)
-    return data, labels
-
-
-_get_segment.data = None
-_get_segment.labels = None
-
 _TRAINING_SEGMENT = 0
-_FILLING_SEGMENT = 1
-_TESTING_SEGMENT = 2
+_VALIDATING_SEGMENT = 1
+_FILLING_SEGMENT = 2
+_TESTING_SEGMENT = 3
+
+
+def get_training(
+    fold,
+    categorical=False,
+    shuffle=True,
+    predict_only=False,
+):
+    return _get_segment(
+        _TRAINING_SEGMENT,
+        fold,
+        categorical,
+        shuffle=shuffle,
+        predict_only=predict_only,
+    )
+
+
+def get_validating(
+    fold,
+    categorical=False,
+    shuffle=True,
+    predict_only=False,
+):
+    return _get_segment(
+        _VALIDATING_SEGMENT,
+        fold,
+        categorical,
+        shuffle=shuffle,
+        predict_only=predict_only,
+    )
+
+
+def get_filling(fold, shuffle=True, predict_only=False):
+    return _get_segment(
+        _FILLING_SEGMENT,
+        fold,
+        shuffle=shuffle,
+        predict_only=predict_only,
+    )
+
+
+def get_testing(
+    fold,
+    categorical=False,
+    shuffle=True,
+    predict_only=False,
+):
+    return _get_segment(
+        _TESTING_SEGMENT,
+        fold,
+        categorical=categorical,
+        shuffle=shuffle,
+        predict_only=predict_only,
+    )
+
+
+def _get_segment(
+    segment,
+    fold,
+    categorical=False,
+    shuffle=True,
+    predict_only=False,
+):
+    hdf5_path = os.path.join(constants.data_path, constants.prep_hdf5_fname)
+
+    # Run the one-time loading/balancing logic if HDF5 doesn't exist
+    if not os.path.exists(hdf5_path):
+        total_size = _load_dataset(constants.data_path)
+    else:
+        with h5py.File(hdf5_path, 'r') as f:
+            total_size = f['labels'].shape[0]
+
+    training_size = int(total_size * constants.nn_training_percent)
+    validating_size = int(total_size * constants.nn_validating_percent)
+    filling_size = int(total_size * constants.am_filling_percent)
+    testing_size = int(total_size * constants.nn_testing_percent)
+    step = int(total_size / constants.n_folds)
+    i = fold * step
+    j = i + training_size
+    k = j + validating_size
+    m = k + filling_size
+    n = m + testing_size
+    j = j % total_size
+    k = k % total_size
+    m = m % total_size
+    n = n % total_size
+    if segment == _TRAINING_SEGMENT:
+        p, q = i, j
+    elif segment == _VALIDATING_SEGMENT:
+        p, q = j, k
+    elif segment == _FILLING_SEGMENT:
+        p, q = k, m
+    elif segment == _TESTING_SEGMENT:
+        p, q = m, n
+
+    if p < q:
+        segments = [(p, q)]
+    else:
+        segments = [(p, total_size), (0, q)]
+    return QuickDrawGenerator(
+        hdf5_path,
+        segments,
+        categorical=categorical,
+        batch_size=constants.batch_size,
+        shuffle=shuffle,
+        predict_only=predict_only,
+    )
 
 
 def _load_dataset(path):
-    data, labels = _preprocessed_dataset(path)
-    if (data is None) or (labels is None):
-        data, labels = _load_quickdraw(path)
-        data = data.astype(float) / 255.0
-        data, labels = _shuffle(data, data, labels)  # Only shuffle data and labels
-        _save_dataset(data, labels, path)
-    return data, labels
+    data, labels = _load_quickdraw(path)
+    _save_dataset_as_hdf5(data, labels, path)
+    total_size = data.shape[0]
+    return total_size
 
 
-def _preprocessed_dataset(path):
-    data_fname = os.path.join(path, constants.prep_data_fname)
-    labels_fname = os.path.join(path, constants.prep_labels_fname)
-    data = None
-    labels = None
-    try:
-        data = np.load(data_fname)
-        labels = np.load(labels_fname).astype('int')
-        print('Preprocessed dataset exists, so it is used.')
-    except FileNotFoundError:
-        print('Preprocessed dataset does not exist, so it will be created.')
-    except Exception as e:
-        print(f'Error loading preprocessed dataset: {e}')
-        exit(1)
-    return data, labels
+def _save_dataset_as_hdf5(data, labels, path):
+    """Saves the balanced, shuffled data into a permanent HDF5 container."""
+    data, labels = _shuffle_dataset(data, labels)
+    hdf5_fname = os.path.join(path, constants.prep_hdf5_fname)
+    print(f'Creating HDF5 dataset at {hdf5_fname}...')
 
-
-def _save_dataset(data, labels, path):
-    print('Saving preprocessed dataset')
-    data_fname = os.path.join(path, constants.prep_data_fname)
-    labels_fname = os.path.join(path, constants.prep_labels_fname)
-    np.save(data_fname, data)
-    np.save(labels_fname, labels)
-
-
-def _shuffle(data, _, labels):
-    print('Shuffling data and labels')
-    tuples = [(data[i], labels[i]) for i in range(len(labels))]
-    random.shuffle(tuples)
-    data = np.array([p[0] for p in tuples])
-    labels = np.array([p[1] for p in tuples], dtype=int)
-    return data, labels
+    with h5py.File(hdf5_fname, 'w') as f:
+        # We store as uint8 (0-255) to save disk space (7M images = ~5.5GB)
+        # If we stored as float32, it would be ~22GB!
+        f.create_dataset(
+            'images',
+            data=data.astype('uint8'),
+            chunks=(constants.batch_size, 28, 28),  # Store data in batch-sized blocks
+            compression='gzip',
+        )
+        f.create_dataset('labels', data=labels.astype('int32'))
+    print('HDF5 creation complete.')
 
 
 def _load_quickdraw(path):
@@ -140,6 +169,7 @@ def _load_quickdraw(path):
     Returns:
         data: ndarray of shape (N, 28, 28)
         labels: ndarray of integers of shape (N,)
+    It saves the label mapping in CSV file.
     """
     print('Loading QuickDraw .npy files...')
     files = [f for f in os.listdir(path) if f.endswith('.npy')]
@@ -153,17 +183,17 @@ def _load_quickdraw(path):
     files = files[: constants.n_labels]
     data_list = []
     labels_list = []
-    label_dict = {}
+    label_names = []
     minimum_images = -1
     temp_data_list = []
     temp_labels_list = []
 
     for label_index, filename in enumerate(files):
         full_path = os.path.join(path, filename)
-        class_name = filename.replace('full_numpy_bitmap_', '').replace('.npy', '')
-        label_dict[label_index] = class_name
+        name = filename.replace('full_numpy_bitmap_', '').replace('.npy', '')
+        label_names.append(name)
 
-        print(f'Loading {class_name} from {full_path}...')
+        print(f'Loading {name} from {full_path}...')
         images = np.load(full_path)
         if minimum_images == -1:
             minimum_images = images.shape[0]
@@ -174,6 +204,10 @@ def _load_quickdraw(path):
         temp_data_list.append(images)
         temp_labels_list.append(np.full(len(images), label_index, dtype=int))
 
+    csv_path = os.path.join(constants.data_path, constants.prep_names_fname)
+    with open(csv_path, 'w') as file:
+        file.write('\n'.join(label_names))
+
     print(f'Balancing the dataset to {minimum_images} per class')
     for data, labels in zip(temp_data_list, temp_labels_list):
         data_list.append(data[:minimum_images])
@@ -182,5 +216,120 @@ def _load_quickdraw(path):
     data = np.concatenate(data_list, axis=0)
     labels = np.concatenate(labels_list, axis=0)
 
-    print(f'Loaded a total of {data.shape[0]} images of {len(label_dict)} classes.')
+    print(f'Loaded a total of {data.shape[0]} images of {len(label_names)} classes.')
     return data, labels
+
+
+def _shuffle_dataset(data, labels):
+    indices = np.arange(data.shape[0])
+    np.random.shuffle(indices)
+    data = data[indices]
+    labels = labels[indices]
+    return data, labels
+
+
+class QuickDrawGenerator(Sequence):
+    def __init__(
+        self,
+        hdf5_path,
+        segments,
+        categorical=False,
+        batch_size=2048,
+        shuffle=True,
+        predict_only=False,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.hdf5_path = hdf5_path
+        self.segments = segments
+        self.categorical = categorical
+        self.batch_size = batch_size
+        self.shuffle = shuffle and not predict_only
+        self.predict_only = predict_only
+        self.total_samples = sum(end - start for start, end in self.segments)
+        self.data_file = None
+        self.on_epoch_end()
+
+    def __len__(self):
+        return int(np.ceil(self.total_samples / self.batch_size))
+
+    def on_epoch_end(self):
+        pass
+
+    def __getitem__(self, idx):
+        # Lazy initialization
+        if self.data_file is None:
+            nbytes = (constants.batch_size // 2) ** 2 * (constants.batch_size // 4)
+            self.data_file = h5py.File(
+                self.hdf5_path, 'r', rdcc_nbytes=nbytes
+            )  # 512MB Cache
+        # Extract the specific indices for this batch
+        start = idx * self.batch_size
+        # Retrieves what remains if it is not a full batch
+        count = min(self.batch_size, self.total_samples - start)
+        x, y = self._get_data_from_h5(start, count)
+        x = x.astype('float32') / 255.0
+
+        if self.predict_only:
+            return x  # Just return the images for prediction
+        if self.shuffle:
+            x, y = _shuffle_dataset(x, y)
+        # Categorical Conversion (Issue #1)
+        if self.categorical:
+            # Converts integer labels to one-hot vectors
+            y = keras.utils.to_categorical(y, num_classes=constants.n_labels)
+        return x, {'classifier': y, 'decoder': x}
+
+    def _get_data_from_h5(self, start, count):
+        """Helper to fetch a slice by jumping through the ranges."""
+        remaining = count
+        current = start
+        results_data = []
+        results_labels = []
+
+        for s_start, s_end in self.segments:
+            range_len = s_end - s_start
+
+            if current < range_len:
+                # How much can we take from this specific range?
+                take = min(remaining, range_len - current)
+
+                # Physical slice in the H5 file
+                h5_start = s_start + current
+                h5_end = h5_start + take
+
+                results_data.append(self.data_file['images'][h5_start:h5_end])
+                if not self.predict_only:
+                    results_labels.append(self.data_file['labels'][h5_start:h5_end])
+
+                remaining -= take
+                current = 0  # Next range starts from its beginning
+            else:
+                # Skips this range entirely
+                current -= range_len
+
+            if remaining <= 0:
+                break
+
+        # Combine the chunks (only happens at the 'gap' boundary)
+        data = np.concatenate(results_data, axis=0)
+        labels = (
+            np.concatenate(results_labels, axis=0) if not self.predict_only else None
+        )
+        return data, labels
+
+    def get_all_labels(self):
+        """Efficiently retrieves all labels without loading a single image."""
+        if self.data_file is None:
+            self.data_file = h5py.File(self.hdf5_path, 'r', swmr=True)
+        label_chunks = []
+        for start, end in self.segments:
+            # We slice ONLY the labels dataset
+            label_chunks.append(self.data_file['labels'][start:end])
+        all_labels = np.concatenate(label_chunks, axis=0)
+        if self.categorical:
+            return keras.utils.to_categorical(
+                all_labels, num_classes=constants.n_labels
+            )
+
+        return all_labels

@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
 import numpy as np
+import h5py
 import tensorflow as tf
 from keras import Model
 from keras.layers import (
@@ -21,6 +23,7 @@ from keras.layers import (
     MaxPool2D,
     Dropout,
     Dense,
+    LeakyReLU,
     Flatten,
     Reshape,
     Conv2DTranspose,
@@ -28,11 +31,10 @@ from keras.layers import (
     LayerNormalization,
     SpatialDropout2D,
 )
-from keras.callbacks import Callback
+from keras.callbacks import EarlyStopping, ReduceLROnPlateau
 import constants
 import dataset
 
-batch_size = 100
 epochs = 300
 patience = 10
 truly_training_percentage = 0.80
@@ -47,7 +49,6 @@ def conv_block(entry, layers, filters, dropout, first_block=False):
                 padding='same',
                 activation='relu',
                 filters=filters,
-                input_shape=(dataset.columns, dataset.rows, 1),
             )(entry)
             first_block = False
         else:
@@ -65,43 +66,60 @@ encoder_nlayers = 40
 
 
 def get_encoder(domain):
-    dropout = 0.5
-    input_data = Input(shape=(dataset.columns, dataset.rows, 1))
+    dropout = 0.1
+    input_data = Input(shape=(dataset.rows, dataset.columns, 1))
     filters = domain // 16
     output = conv_block(input_data, 2, filters, dropout, first_block=True)
     filters *= 2
-    dropout -= 0.05
+    dropout += 0.025
     output = conv_block(output, 2, filters, dropout)
     filters *= 2
-    dropout -= 0.05
+    dropout += 0.025
     output = conv_block(output, 3, filters, dropout)
     filters *= 2
-    dropout -= 0.05
+    dropout += 0.025
     output = conv_block(output, 3, filters, dropout)
     filters *= 2
-    dropout -= 0.05
+    dropout += 0.025
     output = conv_block(output, 3, filters, dropout)
-    output = Flatten()(output)
-    output = LayerNormalization(name='encoded')(output)
+
+    # --- THE FEATURE BOOSTER ---
+    # We add a 2*domain-filter block here to capture fine-grained textures.
+    # But we DO NOT increase the final domain size.
+    dropout *= 2.0
+    output = Conv2D(2 * domain, kernel_size=3, padding='same', activation='relu')(
+        output
+    )
+    output = BatchNormalization()(output)
+    output = SpatialDropout2D(0.4)(output)  # High dropout to prevent memorizing noise
+    # --------------------------------------
+
+    output = Flatten()(output)  # 2*domain
+    output = Dense(constants.domain, name='domain_layer')(output)  # STILL 256
+    output = LayerNormalization()(output)
     return input_data, output
 
 
 def get_decoder(domain):
+    n = int(math.log2(domain))
+    remainer = 3 if (n % 2 != 0) else 2
+    initial_divisor = 2 * remainer
+    iter_divisor = 2 ** ((n - remainer) // 2)
+
     input_mem = Input(shape=(domain,))
+    # With is going to be multiplied by two by each Conv2DTranspose layer in the loop.
     width = dataset.columns // 4
-    filters = domain // 4
-    dense = Dense(width * width * filters, activation='relu', input_shape=(domain,))(
-        input_mem
-    )
+    filters = domain // initial_divisor
+    dense = Dense(width * width * filters, activation='relu')(input_mem)
     output = Reshape((width, width, filters))(dense)
-    dropout = 0.4
+    dropout = 0.2
     for i in range(2):
         trans = Conv2DTranspose(
             kernel_size=3, strides=2, padding='same', activation='relu', filters=filters
         )(output)
         output = SpatialDropout2D(dropout)(trans)
         dropout /= 2.0
-        filters = filters // (constants.domain // 32)
+        filters = filters // iter_divisor
         output = BatchNormalization()(output)
     output = Conv2DTranspose(
         filters=filters, kernel_size=3, strides=1, activation='sigmoid', padding='same'
@@ -115,154 +133,115 @@ classifier_nlayers = 6
 
 def get_classifier(domain):
     input_mem = Input(shape=(domain,))
-    dense = Dense(domain, activation='relu', input_shape=(domain,))(input_mem)
-    drop = Dropout(0.4)(dense)
-    dense = Dense(domain, activation='relu')(drop)
-    drop = Dropout(0.4)(dense)
+    # Uses LeakyReLU or ELU, as they allow negative values to pass through,
+    # so the classifier can "see" the full latent space.
+    dense = Dense(4 * domain)(input_mem)
+    dense = LeakyReLU(negative_slope=0.1)(dense)
+    drop = Dropout(0.2)(dense)
+    dense = Dense(2 * domain)(drop)
+    dense = LeakyReLU(negative_slope=0.1)(dense)
+    drop = Dropout(0.2)(dense)
+    dense = Dense(domain)(drop)
+    dense = LeakyReLU(negative_slope=0.1)(dense)
+    drop = Dropout(0.2)(dense)
+    dense = Dense(domain // 2)(drop)
+    dense = LeakyReLU(negative_slope=0.1)(dense)
+    drop = Dropout(0.2)(dense)
     classification = Dense(constants.n_labels, activation='softmax', name='classified')(
         drop
     )
     return input_mem, classification
 
 
-class EarlyStopping(Callback):
-    """Stop training when the loss gets lower than val_loss.
-
-    Arguments:
-        patience: Number of epochs to wait after condition has been hit.
-        After this number of no reversal, training stops.
-        It starts working after 10% of epochs have taken place.
-    """
-
-    def __init__(self):
-        super(EarlyStopping, self).__init__()
-        self.patience = patience
-        self.prev_val_loss = float('inf')
-        self.prev_val_accuracy = 0.0
-        self.prev_val_rmse = float('inf')
-
-        # best_weights to store the weights at which the loss crossing occurs.
-        self.best_weights = None
-        self.start = min(epochs // 20, 3)
-        self.wait = 0
-
-    def on_train_begin(self, logs=None):
-        # The number of epoch it has waited since loss crossed val_loss.
-        self.wait = 0
-        # The epoch the training stops at.
-        self.stopped_epoch = 0
-
-    def on_epoch_end(self, epoch, logs=None):
-        loss = logs.get('loss')
-        val_loss = logs.get('val_loss')
-        accuracy = logs.get('classifier_accuracy')
-        val_accuracy = logs.get('val_classifier_accuracy')
-        rmse = logs.get('decoder_root_mean_squared_error')
-        val_rmse = logs.get('val_decoder_root_mean_squared_error')
-
-        if epoch < self.start:
-            self.best_weights = self.model.get_weights()
-        elif (loss < val_loss) or (accuracy > val_accuracy) or (rmse < val_rmse):
-            self.wait += 1
-        elif val_accuracy > self.prev_val_accuracy:
-            self.wait = 0
-            self.prev_val_accuracy = val_accuracy
-            self.best_weights = self.model.get_weights()
-        elif val_rmse < self.prev_val_rmse:
-            self.wait = 0
-            self.prev_val_rmse = val_rmse
-            self.best_weights = self.model.get_weights()
-        elif val_loss < self.prev_val_loss:
-            self.wait = 0
-            self.prev_val_loss = val_loss
-            self.best_weights = self.model.get_weights()
-        else:
-            self.wait += 1
-        print(f'Epochs waiting: {self.wait}')
-        if self.wait >= self.patience:
-            self.stopped_epoch = epoch
-            self.model.stop_training = True
-            print('Restoring model weights from the end of the best epoch.')
-            self.model.set_weights(self.best_weights)
-
-    def on_train_end(self, logs=None):
-        if self.stopped_epoch > 0:
-            print('Epoch %05d: early stopping' % (self.stopped_epoch + 1))
-
-
 def train_network(prefix, es):
     confusion_matrix = np.zeros((constants.n_labels, constants.n_labels))
     histories = []
+    strategy = tf.distribute.MirroredStrategy()
     for fold in range(constants.n_folds):
-        training_data, training_labels = dataset.get_training(fold, categorical=True)
-        testing_data, testing_labels = dataset.get_testing(fold, categorical=True)
-        truly_training = int(len(training_labels) * truly_training_percentage)
-        validation_data = training_data[truly_training:]
-        validation_labels = training_labels[truly_training:]
-        training_data = training_data[:truly_training]
-        training_labels = training_labels[:truly_training]
+        print(f'FOLD: {fold}')
+        print('Getting the dataset ready...')
+        training_gen = dataset.get_training(fold, categorical=True)
+        # No shuffling is needed for validation nor testing.
+        validating_gen = dataset.get_validating(fold, categorical=True, shuffle=False)
+        testing_gen = dataset.get_testing(fold, categorical=True, shuffle=False)
+        predict_gen = dataset.get_testing(fold, predict_only=True)
 
         rmse = tf.keras.metrics.RootMeanSquaredError()
-        input_data = Input(shape=(dataset.columns, dataset.rows, 1))
-        domain = constants.domain
-        input_enc, encoded = get_encoder(domain)
-        encoder = Model(input_enc, encoded, name='encoder')
-        encoder.compile(optimizer='adam')
-        encoder.summary()
-        input_cla, classified = get_classifier(domain)
-        classifier = Model(input_cla, classified, name='classifier')
-        classifier.compile(
-            loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy']
-        )
-        classifier.summary()
-        input_dec, decoded = get_decoder(domain)
-        decoder = Model(input_dec, decoded, name='decoder')
-        decoder.compile(optimizer='adam', loss='mean_squared_error', metrics=[rmse])
-        decoder.summary()
-        encoded = encoder(input_data)
-        decoded = decoder(encoded)
-        classified = classifier(encoded)
-        full_classifier = Model(
-            inputs=input_data, outputs=classified, name='full_classifier'
-        )
-        full_classifier.compile(
-            optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy']
-        )
-        autoencoder = Model(inputs=input_data, outputs=decoded, name='autoencoder')
-        autoencoder.compile(loss='huber', optimizer='adam', metrics=[rmse])
+        with strategy.scope():
+            domain = constants.domain
+            print('Building and compiling the neural network...')
+            input_data = Input(shape=(dataset.rows, dataset.columns, 1))
+            input_enc, output_enc = get_encoder(domain)
+            input_class, output_class = get_classifier(domain)
+            input_dec, output_dec = get_decoder(domain)
 
-        model = Model(inputs=input_data, outputs=[classified, decoded])
-        model.compile(
-            loss=['categorical_crossentropy', 'mean_squared_error'],
-            optimizer='adam',
-            metrics={'classifier': 'accuracy', 'decoder': rmse},
+            encoder = Model(input_enc, output_enc, name='encoder')
+            encoder.summary()
+            classifier = Model(input_class, output_class, name='classifier')
+            classifier.summary()
+            decoder = Model(input_dec, output_dec, name='decoder')
+            decoder.summary()
+            encoded = encoder(input_data)
+            decoded = decoder(encoded)
+            classified = classifier(encoded)
+            model = Model(
+                inputs=input_data,
+                outputs={'classifier': classified, 'decoder': decoded},
+            )
+            model.compile(
+                loss=['categorical_crossentropy', 'mean_squared_error'],
+                optimizer=tf.keras.optimizers.Adam(
+                    learning_rate=1e-3
+                ),  # Learning rate for a batch size of 2048
+                loss_weights={'classifier': 1, 'decoder': 0.5},
+                metrics={'classifier': 'accuracy', 'decoder': rmse},
+            )
+            model.summary()
+
+            full_classifier = Model(
+                inputs=input_data, outputs=classified, name='full_classifier'
+            )
+            # autoencoder = Model(inputs=input_data, outputs=decoded, name='autoencoder')
+
+        print('Training the neural network...')
+        early_stopping = EarlyStopping(
+            monitor='val_classifier_accuracy',
+            patience=patience,
+            restore_best_weights=True,
+            mode='max',
+            verbose=2,
         )
-        model.summary()
+
+        lr_reducer = ReduceLROnPlateau(
+            monitor='val_classifier_accuracy',
+            factor=0.2,
+            patience=patience // 2,
+            min_lr=1e-6,
+            mode='max',
+            verbose=2,
+        )
+
         history = model.fit(
-            training_data,
-            (training_labels, training_data),
-            batch_size=batch_size,
+            training_gen,
+            # batch_size=constants.batch_size,
             epochs=epochs,
-            validation_data=(
-                validation_data,
-                {'classifier': validation_labels, 'decoder': validation_data},
-            ),
-            callbacks=[EarlyStopping()],
+            validation_data=validating_gen,
+            callbacks=[early_stopping, lr_reducer],
             verbose=2,
         )
         histories.append(history)
-        history = full_classifier.evaluate(
-            testing_data, testing_labels, return_dict=True
-        )
+        history = model.evaluate(testing_gen, return_dict=True)
         histories.append(history)
-        predicted_labels = np.argmax(full_classifier.predict(testing_data), axis=1)
+        print('Creating the confusion matrix...')
+        predicted_labels = np.argmax(full_classifier.predict(predict_gen), axis=1)
+        # Retrieve True Labels directly from HDF5 using generator indices
+        true_labels = predict_gen.get_all_labels()
         confusion_matrix += tf.math.confusion_matrix(
-            np.argmax(testing_labels, axis=1),
+            true_labels,
             predicted_labels,
             num_classes=constants.n_labels,
         )
-        history = autoencoder.evaluate(testing_data, testing_data, return_dict=True)
-        histories.append(history)
+        print('Saving everything needed for the future...')
         encoder.save(constants.encoder_filename(prefix, es, fold))
         decoder.save(constants.decoder_filename(prefix, es, fold))
         classifier.save(constants.classifier_filename(prefix, es, fold))
@@ -275,32 +254,38 @@ def train_network(prefix, es):
 
 
 def obtain_features(model_prefix, features_prefix, labels_prefix, data_prefix, es):
-    """Generate features for sound segments, corresponding to phonemes.
-
-    Uses the previously trained neural networks for generating the features.
-    """
     for fold in range(constants.n_folds):
-        # Load de encoder
+        # Load the encoder
         filename = constants.encoder_filename(model_prefix, es, fold)
         model = tf.keras.models.load_model(filename)
-        model.summary()
 
-        training_data, training_labels = dataset.get_training(fold)
-        filling_data, filling_labels = dataset.get_filling(fold)
-        testing_data, testing_labels = dataset.get_testing(fold)
+        # 1. Get Generators (which replace the raw data arrays)
+        # We set predict_only=True so the generator returns ONLY images for model.predict
+        # and it does not shuffle them.
+        fill_gen = dataset.get_filling(fold, predict_only=True)
+        test_gen = dataset.get_testing(fold, predict_only=True)
         settings = [
-            (training_data, training_labels, constants.training_suffix),
-            (filling_data, filling_labels, constants.filling_suffix),
-            (testing_data, testing_labels, constants.testing_suffix),
+            (fill_gen, constants.filling_suffix),
+            (test_gen, constants.testing_suffix),
         ]
-        for s in settings:
-            data = s[0]
-            labels = s[1]
-            suffix = s[2]
-            features = model.predict(data)
+
+        for gen, suffix in settings:
+            print(f'Generating features for {suffix}...')
+            features = model.predict(
+                gen,
+                verbose=1,
+            )
+
+            # Since we can't hold all images in RAM easily, we pull them
+            # from the H5 file using the indices stored in the generator.
+            with h5py.File(gen.hdf5_path, 'r') as f:
+                labels = f['labels'][:]
+
             features_filename = constants.data_filename(
                 features_prefix + suffix, es, fold
             )
             labels_filename = constants.data_filename(labels_prefix + suffix, es, fold)
+
+            print('Saving features and labels ...')
             np.save(features_filename, features)
             np.save(labels_filename, labels)

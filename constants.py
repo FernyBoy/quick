@@ -25,8 +25,8 @@ import numpy as np
 data_path = 'data/quick'
 run_path = 'runs'
 idx_digits = 3
-prep_data_fname = 'prep_data.npy'
-prep_labels_fname = 'prep_labels.npy'
+prep_hdf5_fname = 'prep_dataset.h5'
+prep_names_fname = 'prep_names.csv'
 
 image_path = 'images'
 testing_path = 'test'
@@ -82,10 +82,15 @@ learning_suffixes = [
     [original_suffix, amsystem_suffix],
 ]
 
-# Number of columns in memory
+# Number of columns in memory, which it is also the dimension of the latent representation
+# of the neural networks. It must be a power of two greater than 4.
 domain = 256
 n_folds = 1
 n_jobs = 1
+# Batch size is set considering over 7 million elements of data and
+# 2 L4 GPUs with 24 GB of RAM each.
+# It should be a power of two.
+batch_size = 2048
 dreaming_cycles = 6
 
 iota_default = 0.0
@@ -98,19 +103,24 @@ kappa_idx = 1
 xi_idx = 2
 sigma_idx = 3
 
-nn_training_percent = 0.70
+nn_training_percent = 0.50
+nn_validating_percent = 0.20
+nn_testing_percent = 0.10
 am_filling_percent = 0.20
-am_testing_percent = 0.10
+am_testing_percent = nn_testing_percent
 
 # The number of classes used for training the neural networks, and for testing
 # the memory system. It must be a pair number, because in the negation experiment only
 # half of the classes are stored in the memory.
-n_labels = 8
+n_labels = 64
 all_n_labels = list(range(n_labels))
 
 
 def set_n_labels(num_classes):
     global n_labels, all_n_labels
+    if (num_classes < 2) or (num_classes > n_labels):
+        # Only a number of classes lower than or equal to the default n_labels is allowed.
+        raise ValueError(f'The number of classes must be between 2 and ({n_labels}).')
     n_labels = num_classes
     all_n_labels = list(range(n_labels))
 
