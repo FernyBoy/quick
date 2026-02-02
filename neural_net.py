@@ -261,42 +261,31 @@ def obtain_features(model_prefix, features_prefix, labels_prefix, data_prefix, e
 
         # 1. Get Generators (which replace the raw data arrays)
         # We set predict_only=True so the generator returns ONLY images for model.predict
-        train_gen = dataset.get_training(fold, predict_only=True)
+        # and it does not shuffle them.
         fill_gen = dataset.get_filling(fold, predict_only=True)
         test_gen = dataset.get_testing(fold, predict_only=True)
         settings = [
-            (train_gen, constants.training_suffix),
             (fill_gen, constants.filling_suffix),
             (test_gen, constants.testing_suffix),
         ]
 
         for gen, suffix in settings:
-            # 2. Parallel Prediction on Dual L4s
-            # Keras handles the distribution if you wrap this in a strategy scope
-            # or simply rely on its internal optimization for generators.
             print(f'Generating features for {suffix}...')
             features = model.predict(
                 gen,
                 verbose=1,
             )
 
-            # 3. Retrieve Labels and Raw Data for Saving
-            # Since we can't hold all 7M images in RAM easily, we pull them
+            # Since we can't hold all images in RAM easily, we pull them
             # from the H5 file using the indices stored in the generator.
             with h5py.File(gen.hdf5_path, 'r') as f:
-                # We use the generator's indices to ensure the order matches the features
-                indices = gen.indices
-                data = f['images'][indices]
-                labels = f['labels'][indices]
+                labels = f['labels'][:]
 
-            # 4. Save to .npy (as per your original requirement)
-            data_filename = constants.data_filename(data_prefix + suffix, es, fold)
             features_filename = constants.data_filename(
                 features_prefix + suffix, es, fold
             )
             labels_filename = constants.data_filename(labels_prefix + suffix, es, fold)
 
-            print('Saving data, features and labels ...')
-            np.save(data_filename, data)
+            print('Saving features and labels ...')
             np.save(features_filename, features)
             np.save(labels_filename, labels)

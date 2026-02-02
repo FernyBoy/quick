@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
 import numpy as np
 import os
 import random
@@ -222,15 +221,8 @@ def _load_quickdraw(path):
 
 
 def _shuffle_dataset(data, labels):
-    # 1. Create an array of indices [0, 1, 2, ..., N-1]
     indices = np.arange(data.shape[0])
-
-    # 2. Shuffle the indices in-place (very fast, low memory)
     np.random.shuffle(indices)
-
-    # 3. Use 'fancy indexing' to reorder both arrays in one go
-    # This creates a new shuffled array.
-    # For 7M images (uint8), this uses ~5.5GB of RAM temporarily.
     data = data[indices]
     labels = labels[indices]
     return data, labels
@@ -282,7 +274,7 @@ class QuickDrawGenerator(Sequence):
             return x  # Just return the images for prediction
         if self.shuffle:
             x, y = _shuffle_dataset(x, y)
-        # 2. Categorical Conversion (Issue #1)
+        # Categorical Conversion (Issue #1)
         if self.categorical:
             # Converts integer labels to one-hot vectors
             y = keras.utils.to_categorical(y, num_classes=constants.n_labels)
@@ -292,8 +284,8 @@ class QuickDrawGenerator(Sequence):
         """Helper to fetch a slice by jumping through the ranges."""
         remaining = count
         current = start
-        results_x = []
-        results_y = []
+        results_data = []
+        results_labels = []
 
         for s_start, s_end in self.segments:
             range_len = s_end - s_start
@@ -306,9 +298,9 @@ class QuickDrawGenerator(Sequence):
                 h5_start = s_start + current
                 h5_end = h5_start + take
 
-                results_x.append(self.data_file['images'][h5_start:h5_end])
+                results_data.append(self.data_file['images'][h5_start:h5_end])
                 if not self.predict_only:
-                    results_y.append(self.data_file['labels'][h5_start:h5_end])
+                    results_labels.append(self.data_file['labels'][h5_start:h5_end])
 
                 remaining -= take
                 current = 0  # Next range starts from its beginning
@@ -320,23 +312,21 @@ class QuickDrawGenerator(Sequence):
                 break
 
         # Combine the chunks (only happens at the 'gap' boundary)
-        x = np.concatenate(results_x, axis=0)
-        y = np.concatenate(results_y, axis=0) if not self.predict_only else None
-        return x, y
+        data = np.concatenate(results_data, axis=0)
+        labels = (
+            np.concatenate(results_labels, axis=0) if not self.predict_only else None
+        )
+        return data, labels
 
     def get_all_labels(self):
         """Efficiently retrieves all labels without loading a single image."""
         if self.data_file is None:
             self.data_file = h5py.File(self.hdf5_path, 'r', swmr=True)
-
         label_chunks = []
         for start, end in self.segments:
             # We slice ONLY the labels dataset
             label_chunks.append(self.data_file['labels'][start:end])
-
         all_labels = np.concatenate(label_chunks, axis=0)
-
-        # No shuffling is performed here, as the order matters for evaluation
         if self.categorical:
             return keras.utils.to_categorical(
                 all_labels, num_classes=constants.n_labels
