@@ -275,12 +275,7 @@ def obtain_features(model_prefix, features_prefix, labels_prefix, data_prefix, e
                 gen,
                 verbose=1,
             )
-
-            # Since we can't hold all images in RAM easily, we pull them
-            # from the H5 file using the indices stored in the generator.
-            with h5py.File(gen.hdf5_path, 'r') as f:
-                labels = f['labels'][:]
-
+            labels = gen.get_all_labels()
             features_filename = constants.data_filename(
                 features_prefix + suffix, es, fold
             )
