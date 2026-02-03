@@ -43,7 +43,6 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
 import tensorflow as tf
-from itertools import islice
 import gettext
 import gc
 from docopt import docopt
@@ -65,6 +64,9 @@ if typing.TYPE_CHECKING:
 
 # Translation
 gettext.install('eam', localedir=None, names=None)
+
+
+# region Plotting functions -------------------------------------------------------------
 
 
 def plot_metrics_graph(
@@ -258,22 +260,128 @@ def plot_memory(memory: AssociativeMemory, name, es, fold):
     plt.savefig(filename, dpi=600)
 
 
-def maximum(arrays):
-    max = float('-inf')
-    for a in arrays:
-        local_max = np.max(a)
-        if local_max > max:
-            max = local_max
-    return max
+# endregion Plotting functions ----------------------------------------------------
+
+# region Auxiliary functions -------------------------------------------------------------
 
 
-def minimum(arrays):
-    min = float('inf')
-    for a in arrays:
-        local_min = np.min(a)
-        if local_min < min:
-            min = local_min
-    return min
+def filter_by_labels(
+    filling_features, filling_labels, testing_features, testing_labels, threshold
+):
+    mask = testing_labels < threshold
+    testing_labels = testing_labels[mask]
+    testing_features = testing_features[mask]
+    if es.experiment_number == 2:
+        threshold //= 2
+        print(f'Adjusted threshold = {threshold}')
+    mask = filling_labels < threshold
+    filling_labels = filling_labels[mask]
+    filling_features = filling_features[mask]
+    return filling_features, filling_labels, testing_features, testing_labels
+
+
+def load_features_and_labels(es, fold):
+    suffix = constants.filling_suffix
+    filling_features_filename = constants.features_name(es) + suffix
+    filling_features_filename = constants.input_data_filename(
+        filling_features_filename, es, fold
+    )
+    filling_labels_filename = constants.labels_name(es) + suffix
+    filling_labels_filename = constants.input_data_filename(
+        filling_labels_filename, es, fold
+    )
+
+    suffix = constants.testing_suffix
+    testing_features_filename = constants.features_name(es) + suffix
+    testing_features_filename = constants.input_data_filename(
+        testing_features_filename, es, fold
+    )
+    testing_labels_filename = constants.labels_name(es) + suffix
+    testing_labels_filename = constants.input_data_filename(
+        testing_labels_filename, es, fold
+    )
+
+    filling_features = np.load(filling_features_filename)
+    filling_labels = np.load(filling_labels_filename)
+    testing_features = np.load(testing_features_filename)
+    testing_labels = np.load(testing_labels_filename)
+
+    # Reduces the original data to only the classes for the current experiment,
+    # given the number of labels.
+    filling_features, filling_labels, testing_features, testing_labels = (
+        filter_by_labels(
+            filling_features,
+            filling_labels,
+            testing_features,
+            testing_labels,
+            constants.n_labels,
+        )
+    )
+    return filling_features, filling_labels, testing_features, testing_labels
+
+
+# endregion Auxiliary functions ----------------------------------------------------------
+
+# region Neural network construction functions -------------------------------------------
+
+
+def save_history(history, prefix, es):
+    """Saves the stats of neural networks.
+
+    Neural networks stats may come either as a History object, that includes
+    a History.history dictionary with stats, or directly as a dictionary.
+    """
+    stats = {}
+    stats['history'] = []
+    for h in history:
+        while not ((type(h) is dict) or (type(h) is list)):
+            h = h.history
+        stats['history'].append(h)
+    with open(constants.json_filename(prefix, es), 'w') as outfile:
+        json.dump(stats, outfile)
+
+
+def save_conf_matrix(matrix, prefix, es):
+    name = prefix + constants.matrix_suffix
+    plot_conf_matrix(
+        matrix, range(constants.n_labels), range(constants.n_labels), name, es
+    )
+    filename = constants.data_filename(name, es)
+    np.save(filename, matrix)
+
+
+# endregion Neural network results -------------------------------------------------------
+
+# region Memory evaluation functions -----------------------------------------------------
+
+
+def optimum_indexes(precisions, accuracies):
+    """Finds the indexes of the best n memory sizes according to precision and accuracy."""
+    accs = []
+    for idx, acc in enumerate(accuracies):
+        accs.append((acc, idx))
+    accs.sort(reverse=True, key=lambda tuple: tuple[0])
+    return [t[1] for t in accs[: constants.n_best_memory_sizes]]
+
+
+def save_learned_params(mem_sizes, fill_percents, es):
+    """Saves the best memory sizes and filling percentages found.
+
+    The parameters are saved as a 2-row numpy array, where the first row
+    contains the memory sizes, and the second row contains the filling
+    percentages.
+    """
+    name = constants.learn_params_name(es)
+    filename = constants.data_filename(name, es, None)
+    np.save(filename, np.array([mem_sizes, fill_percents], dtype=int))
+
+
+def load_learned_params(es):
+    name = constants.learn_params_name(es)
+    filename = constants.data_filename(name, es)
+    params = np.load(filename)
+    size_fill = [(params[0, j], params[1, j]) for j in range(params.shape[1])]
+    return size_fill
 
 
 def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold, es):
@@ -317,31 +425,6 @@ def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold,
     print('Confusion matrix:')
     constants.print_csv(confrix)
     return confrix, behaviour
-
-
-def split_by_label(fl_pairs):
-    label_dict = {}
-    for label in range(constants.n_labels):
-        label_dict[label] = []
-    for features, label in fl_pairs:
-        label_dict[label].append(features)
-    return label_dict.items()
-
-
-def split_every(n, iterable):
-    i = iter(iterable)
-    piece = list(islice(i, n))
-    while piece:
-        yield piece
-        piece = list(islice(i, n))
-
-
-def optimum_indexes(precisions, accuracies):
-    accs = []
-    for idx, acc in enumerate(accuracies):
-        accs.append((acc, idx))
-    accs.sort(reverse=True, key=lambda tuple: tuple[0])
-    return [t[1] for t in accs[: constants.n_best_memory_sizes]]
 
 
 def ams_size_results(
@@ -441,48 +524,9 @@ def test_memory_sizes(domain, es):
         classifier = tf.keras.models.load_model(filename)
 
         # Loads the full set of features and labels.
-        suffix = constants.filling_suffix
-        filling_features_filename = constants.features_name(es) + suffix
-        filling_features_filename = constants.input_data_filename(
-            filling_features_filename, es, fold
+        filling_features, filling_labels, testing_features, testing_labels = (
+            load_features_and_labels(es, fold)
         )
-        filling_labels_filename = constants.labels_name(es) + suffix
-        filling_labels_filename = constants.input_data_filename(
-            filling_labels_filename, es, fold
-        )
-
-        suffix = constants.testing_suffix
-        testing_features_filename = constants.features_name(es) + suffix
-        testing_features_filename = constants.input_data_filename(
-            testing_features_filename, es, fold
-        )
-        testing_labels_filename = constants.labels_name(es) + suffix
-        testing_labels_filename = constants.input_data_filename(
-            testing_labels_filename, es, fold
-        )
-
-        filling_features = np.load(filling_features_filename)
-        filling_labels = np.load(filling_labels_filename)
-        testing_features = np.load(testing_features_filename)
-        testing_labels = np.load(testing_labels_filename)
-
-        print('Original data (all labels):')
-        print(f'\tFilling data shape: {filling_features.shape}')
-        print(f'\tTesting data shape: {testing_features.shape}')
-        print(f'\tTotal of labels = {len(np.unique(testing_labels))}')
-
-        # Reduces the original data to only the classes for the current experiment,
-        # given the number of labels.
-        threshold = constants.n_labels
-        mask = testing_labels < threshold
-        testing_labels = testing_labels[mask]
-        testing_features = testing_features[mask]
-        if es.experiment_number == 2:
-            threshold //= 2
-            print(f'Adjusted threshold = {threshold}')
-        mask = filling_labels < threshold
-        filling_labels = filling_labels[mask]
-        filling_features = filling_features[mask]
         print('Filtered data:')
         print(f'\tFilling data shape: {filling_features.shape}')
         print(f'\tTesting data shape: {testing_features.shape}')
@@ -503,7 +547,7 @@ def test_memory_sizes(domain, es):
                 filling_labels,
                 testing_labels,
                 classifier,
-                threshold,
+                constants.n_labels,
                 es,
             )
             measures.append(results)
@@ -654,43 +698,9 @@ def test_filling_per_fold(mem_size, domain, es, fold):
     filename = constants.classifier_filename(model_prefix, es, fold)
     classifier = tf.keras.models.load_model(filename)
 
-    suffix = constants.filling_suffix
-    filling_features_filename = constants.features_name(es) + suffix
-    filling_features_filename = constants.input_data_filename(
-        filling_features_filename, es, fold
+    filling_features, filling_labels, testing_features, testing_labels = (
+        load_features_and_labels(es, fold)
     )
-    filling_labels_filename = constants.labels_name(es) + suffix
-    filling_labels_filename = constants.input_data_filename(
-        filling_labels_filename, es, fold
-    )
-
-    suffix = constants.testing_suffix
-    testing_features_filename = constants.features_name(es) + suffix
-    testing_features_filename = constants.input_data_filename(
-        testing_features_filename, es, fold
-    )
-    testing_labels_filename = constants.labels_name(es) + suffix
-    testing_labels_filename = constants.input_data_filename(
-        testing_labels_filename, es, fold
-    )
-
-    filling_features = np.load(filling_features_filename)
-    filling_labels = np.load(filling_labels_filename)
-    testing_features = np.load(testing_features_filename)
-    testing_labels = np.load(testing_labels_filename)
-
-    # Reduces the original data to only the classes for the current experiment,
-    # given the number of labels.
-    threshold = constants.n_labels
-    mask = testing_labels < threshold
-    testing_labels = testing_labels[mask]
-    testing_features = testing_features[mask]
-    if es.experiment_number == 2:
-        threshold //= 2
-        print(f'Adjusted threshold = {threshold}')
-    mask = filling_labels < threshold
-    filling_labels = filling_labels[mask]
-    filling_features = filling_features[mask]
     print('Filtered data:')
     print(f'Filling data shape: {filling_features.shape}')
     print(f'Testing data shape: {testing_features.shape}')
@@ -721,7 +731,7 @@ def test_filling_per_fold(mem_size, domain, es, fold):
             testing_labels,
             percent,
             classifier,
-            threshold,
+            constants.n_labels,
             es,
         )
         # A list of tuples (position, label, features)
@@ -868,145 +878,43 @@ def test_memory_fills(domain, mem_sizes, es):
     return best_filling_percents
 
 
-def save_history(history, prefix, es):
-    """Saves the stats of neural networks.
+# endregion Memory evaluation functions ---------------------------------------------------
 
-    Neural networks stats may come either as a History object, that includes
-    a History.history dictionary with stats, or directly as a dictionary.
-    """
-    stats = {}
-    stats['history'] = []
-    for h in history:
-        while not ((type(h) is dict) or (type(h) is list)):
-            h = h.history
-        stats['history'].append(h)
-    with open(constants.json_filename(prefix, es), 'w') as outfile:
-        json.dump(stats, outfile)
+# region Remembering functions ----------------------------------------------------------
 
 
-def save_conf_matrix(matrix, prefix, es):
-    name = prefix + constants.matrix_suffix
-    plot_conf_matrix(
-        matrix, range(constants.n_labels), range(constants.n_labels), name, es
+def store_image(filename, array):
+    pixels = array.reshape(dataset.rows, dataset.columns)
+    pixels = pixels.round().astype(np.uint8)
+    png.from_array(pixels, 'L;8').save(filename)
+
+
+def store_original_and_test(testing, prod_test, directory, idx, label, es, fold):
+    testing_filename = constants.testing_image_filename(directory, idx, label, es, fold)
+    prod_test_filename = constants.prod_testing_image_filename(
+        directory, idx, label, es, fold
     )
-    filename = constants.data_filename(name, es)
-    np.save(filename, matrix)
+    for file in [
+        testing_filename,
+        prod_test_filename,
+    ]:
+        dirname = os.path.dirname(file)
+        if not os.path.exists(dirname):
+            os.makedirs(dirname)
+    store_image(testing_filename, testing)
+    store_image(prod_test_filename, prod_test)
 
 
-def save_learned_params(mem_sizes, fill_percents, es):
-    """Saves the best memory sizes and filling percentages found.
-
-    The parameters are saved as a 2-row numpy array, where the first row
-    contains the memory sizes, and the second row contains the filling
-    percentages.
-    """
-    name = constants.learn_params_name(es)
-    filename = constants.data_filename(name, es, None)
-    np.save(filename, np.array([mem_sizes, fill_percents], dtype=int))
+def store_memory(memory, directory, idx, label, es, fold):
+    filename = constants.memory_image_filename(directory, idx, label, es, fold)
+    full_directory = constants.dirname(filename)
+    if full_directory not in store_memory.created_dirs:
+        constants.create_directory(full_directory)
+        store_memory.created_dirs.append(full_directory)
+    store_image(filename, memory)
 
 
-def load_learned_params(es):
-    name = constants.learn_params_name(es)
-    filename = constants.data_filename(name, es)
-    params = np.load(filename)
-    size_fill = [(params[0, j], params[1, j]) for j in range(params.shape[1])]
-    return size_fill
-
-
-def remember(msize, mfill, es):
-    msize_suffix = constants.msize_suffix(msize)
-    print(f'Running remembering for sigma = {es.mem_params[constants.sigma_idx]}')
-    suffix = msize_suffix
-    memories_prefix = constants.memories_name(es) + suffix
-    recognition_prefix = constants.recognition_name(es) + suffix
-    weights_prefix = constants.weights_name(es) + suffix
-    classif_prefix = constants.classification_name(es) + suffix
-    prefixes_list = [
-        [memories_prefix, recognition_prefix, weights_prefix, classif_prefix],
-    ]
-
-    for fold in range(constants.n_folds):
-        print(f'Running remembering for fold: {fold}')
-        suffix = constants.filling_suffix
-        filling_features_filename = constants.features_name(es) + suffix
-        filling_features_filename = constants.input_data_filename(
-            filling_features_filename, es, fold
-        )
-        filling_labels_filename = constants.labels_name(es) + suffix
-        filling_labels_filename = constants.input_data_filename(
-            filling_labels_filename, es, fold
-        )
-
-        suffix = constants.testing_suffix
-        testing_features_filename = constants.features_name(es) + suffix
-        testing_features_filename = constants.input_data_filename(
-            testing_features_filename, es, fold
-        )
-
-        filling_features = np.load(filling_features_filename)
-        filling_labels = np.load(filling_labels_filename)
-        testing_features = np.load(testing_features_filename)
-
-        known_threshold = constants.n_labels // 2
-        known_label_mask = filling_labels < known_threshold
-        filling_features = filling_features[known_label_mask]
-
-        qd = qudeq.QuDeq(filling_features, percentiles=constants.use_percentiles)
-        filling_rounded = qd.quantize(filling_features, msize)
-        testing_rounded = qd.quantize(testing_features, msize)
-
-        # Create the memory and fill it
-        eam = AssociativeMemory(
-            constants.domain,
-            msize,
-            es,
-        )
-        end = round(len(filling_features) * mfill / 100.0)
-        for features in filling_rounded[:end]:
-            eam.register(features)
-        print(f'Memory of size {msize} filled with {end} elements for fold {fold}')
-
-        for features, prefixes in zip([testing_rounded], prefixes_list):
-            remember_with_sigma(eam, features, prefixes, msize, qd, es, fold)
-    print('Remembering done!')
-
-
-def remember_with_sigma(eam, features, prefixes, msize, qd, es, fold):
-    memories_prefix = prefixes[0]
-    recognition_prefix = prefixes[1]
-    weights_prefix = prefixes[2]
-    classif_prefix = prefixes[3]
-
-    memories_features = []
-    memories_recognition = []
-    memories_weights = []
-    for fs in features:
-        memory, recognized, weight = eam.recall(fs)
-        memories_features.append(memory)
-        memories_recognition.append(recognized)
-        memories_weights.append(weight)
-    memories_features = np.array(memories_features, dtype=float)
-    memories_features = qd.dequantize(memories_features, msize)
-    memories_recognition = np.array(memories_recognition, dtype=int)
-    memories_weights = np.array(memories_weights, dtype=float)
-
-    model_prefix = constants.model_name(es)
-    filename = constants.classifier_filename(model_prefix, es, fold)
-    classifier = tf.keras.models.load_model(filename)
-    classification = np.argmax(classifier.predict(memories_features), axis=1)
-    for i in range(len(classification)):
-        # If the memory does not recognize it, it should not be classified.
-        if not memories_recognition[i]:
-            classification[i] = constants.n_labels
-
-    features_filename = constants.data_filename(memories_prefix, es, fold)
-    recognition_filename = constants.data_filename(recognition_prefix, es, fold)
-    weights_filename = constants.data_filename(weights_prefix, es, fold)
-    classification_filename = constants.data_filename(classif_prefix, es, fold)
-    np.save(features_filename, memories_features)
-    np.save(recognition_filename, memories_recognition)
-    np.save(weights_filename, memories_weights)
-    np.save(classification_filename, classification)
+store_memory.created_dirs = []
 
 
 def decode_test_features(es):
@@ -1079,47 +987,84 @@ def decode_memories(msize, es):
             store_memory(memory, memories_path, i, label, es, fold)
 
 
-def store_original_and_test(testing, prod_test, directory, idx, label, es, fold):
-    testing_filename = constants.testing_image_filename(directory, idx, label, es, fold)
-    prod_test_filename = constants.prod_testing_image_filename(
-        directory, idx, label, es, fold
-    )
-    for file in [
-        testing_filename,
-        prod_test_filename,
-    ]:
-        dirname = os.path.dirname(file)
-        if not os.path.exists(dirname):
-            os.makedirs(dirname)
-    store_image(testing_filename, testing)
-    store_image(prod_test_filename, prod_test)
+def remember_with_sigma(eam, features, prefixes, msize, qd, es, fold):
+    memories_prefix = prefixes[0]
+    recognition_prefix = prefixes[1]
+    weights_prefix = prefixes[2]
+    classif_prefix = prefixes[3]
+
+    memories_features = []
+    memories_recognition = []
+    memories_weights = []
+    for fs in features:
+        memory, recognized, weight = eam.recall(fs)
+        memories_features.append(memory)
+        memories_recognition.append(recognized)
+        memories_weights.append(weight)
+    memories_features = np.array(memories_features, dtype=float)
+    memories_features = qd.dequantize(memories_features, msize)
+    memories_recognition = np.array(memories_recognition, dtype=int)
+    memories_weights = np.array(memories_weights, dtype=float)
+
+    model_prefix = constants.model_name(es)
+    filename = constants.classifier_filename(model_prefix, es, fold)
+    classifier = tf.keras.models.load_model(filename)
+    classification = np.argmax(classifier.predict(memories_features), axis=1)
+    for i in range(len(classification)):
+        # If the memory does not recognize it, it should not be classified.
+        if not memories_recognition[i]:
+            classification[i] = constants.n_labels
+
+    features_filename = constants.data_filename(memories_prefix, es, fold)
+    recognition_filename = constants.data_filename(recognition_prefix, es, fold)
+    weights_filename = constants.data_filename(weights_prefix, es, fold)
+    classification_filename = constants.data_filename(classif_prefix, es, fold)
+    np.save(features_filename, memories_features)
+    np.save(recognition_filename, memories_recognition)
+    np.save(weights_filename, memories_weights)
+    np.save(classification_filename, classification)
 
 
-def store_memory(memory, directory, idx, label, es, fold):
-    filename = constants.memory_image_filename(directory, idx, label, es, fold)
-    full_directory = constants.dirname(filename)
-    if full_directory not in store_memory.created_dirs:
-        constants.create_directory(full_directory)
-        store_memory.created_dirs.append(full_directory)
-    store_image(filename, memory)
+def remember(msize, mfill, es):
+    msize_suffix = constants.msize_suffix(msize)
+    print(f'Running remembering for sigma = {es.mem_params[constants.sigma_idx]}')
+    suffix = msize_suffix
+    memories_prefix = constants.memories_name(es) + suffix
+    recognition_prefix = constants.recognition_name(es) + suffix
+    weights_prefix = constants.weights_name(es) + suffix
+    classif_prefix = constants.classification_name(es) + suffix
+    prefixes_list = [
+        [memories_prefix, recognition_prefix, weights_prefix, classif_prefix],
+    ]
+
+    for fold in range(constants.n_folds):
+        print(f'Running remembering for fold: {fold}')
+        # Load filling and testing features and labels
+        filling_features, _, testing_features, _ = load_features_and_labels(es, fold)
+
+        qd = qudeq.QuDeq(filling_features, percentiles=constants.use_percentiles)
+        filling_rounded = qd.quantize(filling_features, msize)
+        testing_rounded = qd.quantize(testing_features, msize)
+
+        # Create the memory and fill it
+        eam = AssociativeMemory(
+            constants.domain,
+            msize,
+            es,
+        )
+        end = round(len(filling_features) * mfill / 100.0)
+        for features in filling_rounded[:end]:
+            eam.register(features)
+        print(f'Memory of size {msize} filled with {end} elements for fold {fold}')
+
+        for features, prefixes in zip([testing_rounded], prefixes_list):
+            remember_with_sigma(eam, features, prefixes, msize, qd, es, fold)
+    print('Remembering done!')
 
 
-store_memory.created_dirs = []
+# endregion Remembering functions --------------------------------------------------------
 
-
-def store_dream(dream, label, index, suffix, es, fold):
-    dreams_path = constants.dreams_path + suffix
-    store_memory(dream, dreams_path, index, label, es, fold)
-
-
-def store_image(filename, array):
-    pixels = array.reshape(dataset.rows, dataset.columns)
-    pixels = pixels.round().astype(np.uint8)
-    png.from_array(pixels, 'L;8').save(filename)
-
-
-##############################################################################
-# Main section
+# region Main functionality functions ----------------------------------------------------
 
 
 def create_and_train_network(es):
@@ -1160,6 +1105,10 @@ def generate_memories(es):
         remember(msize, mfill, es)
         decode_memories(msize, es)
 
+
+# endregion Main functionality functions -------------------------------------------------
+
+# region Command-line interface -----------------------------------------------------------
 
 if __name__ == '__main__':
     args = docopt(__doc__)
@@ -1219,3 +1168,6 @@ if __name__ == '__main__':
         run_evaluation(exp_settings)
     elif args['-r']:
         generate_memories(exp_settings)
+
+
+# endregion Command-line interface ---------------------------------------------------------

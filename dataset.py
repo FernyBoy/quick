@@ -267,18 +267,18 @@ class QuickDrawGenerator(Sequence):
         start = idx * self.batch_size
         # Retrieves what remains if it is not a full batch
         count = min(self.batch_size, self.total_samples - start)
-        x, y = self._get_data_from_h5(start, count)
-        x = x.astype('float32') / 255.0
+        data, labels = self._get_data_from_h5(start, count)
+        data = data.astype('float32') / 255.0
 
         if self.predict_only:
-            return x  # Just return the images for prediction
+            return data  # Just return the images for prediction
         if self.shuffle:
-            x, y = _shuffle_dataset(x, y)
+            data, labels = _shuffle_dataset(data, labels)
         # Categorical Conversion (Issue #1)
         if self.categorical:
             # Converts integer labels to one-hot vectors
-            y = keras.utils.to_categorical(y, num_classes=constants.n_labels)
-        return x, {'classifier': y, 'decoder': x}
+            labels = keras.utils.to_categorical(labels, num_classes=constants.n_labels)
+        return data, {'classifier': labels, 'decoder': data}
 
     def _get_data_from_h5(self, start, count):
         """Helper to fetch a slice by jumping through the ranges."""
