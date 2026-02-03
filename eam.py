@@ -266,7 +266,7 @@ def plot_memory(memory: AssociativeMemory, name, es, fold):
 
 
 def filter_by_labels(
-    filling_features, filling_labels, testing_features, testing_labels, threshold
+    filling_features, filling_labels, testing_features, testing_labels, threshold, es
 ):
     mask = testing_labels < threshold
     testing_labels = testing_labels[mask]
@@ -315,6 +315,7 @@ def load_features_and_labels(es, fold):
             testing_features,
             testing_labels,
             constants.n_labels,
+            es,
         )
     )
     return filling_features, filling_labels, testing_features, testing_labels
