@@ -147,14 +147,14 @@ def get_classifier(domain):
     dense = Dense(domain // 2)(drop)
     dense = LeakyReLU(negative_slope=0.1)(dense)
     drop = Dropout(0.2)(dense)
-    classification = Dense(constants.n_labels, activation='softmax', name='classified')(
-        drop
-    )
+    classification = Dense(
+        constants.network_labels, activation='softmax', name='classified'
+    )(drop)
     return input_mem, classification
 
 
 def train_network(prefix, es):
-    confusion_matrix = np.zeros((constants.n_labels, constants.n_labels))
+    confusion_matrix = np.zeros((constants.network_labels, constants.network_labels))
     histories = []
     strategy = tf.distribute.MirroredStrategy()
     for fold in range(constants.n_folds):
@@ -239,7 +239,7 @@ def train_network(prefix, es):
         confusion_matrix += tf.math.confusion_matrix(
             true_labels,
             predicted_labels,
-            num_classes=constants.n_labels,
+            num_classes=constants.network_labels,
         )
         print('Saving everything needed for the future...')
         encoder.save(constants.encoder_filename(prefix, es, fold))

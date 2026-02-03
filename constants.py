@@ -110,19 +110,23 @@ am_filling_percent = 0.20
 am_testing_percent = nn_testing_percent
 
 # The number of classes used for training the neural networks, and for testing
-# the memory system. It must be a pair number, because in the negation experiment only
+# the memory system. The first one must be a power of two (8 at least) while
+# the second must be a pair number, because in the negation experiment only
 # half of the classes are stored in the memory.
-n_labels = 64
-all_n_labels = list(range(n_labels))
+network_labels = 64
+memory_labels = 64
+all_memory_labels = range(memory_labels)
 
 
-def set_n_labels(num_classes):
-    global n_labels, all_n_labels
-    if (num_classes < 2) or (num_classes > n_labels):
+def set_memory_labels(num_classes):
+    global memory_labels, all_memory_labels
+    if (num_classes < 2) or (num_classes > memory_labels):
         # Only a number of classes lower than or equal to the default n_labels is allowed.
-        raise ValueError(f'The number of classes must be between 2 and ({n_labels}).')
-    n_labels = num_classes
-    all_n_labels = list(range(n_labels))
+        raise ValueError(
+            f'The number of classes must be between 2 and ({memory_labels}).'
+        )
+    memory_labels = num_classes
+    all_memory_labels = list(range(memory_labels))
 
 
 label_formats = [

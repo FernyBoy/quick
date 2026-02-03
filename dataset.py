@@ -174,13 +174,13 @@ def _load_quickdraw(path):
     print('Loading QuickDraw .npy files...')
     files = [f for f in os.listdir(path) if f.endswith('.npy')]
     random.shuffle(files)
-    if len(files) < constants.n_labels:
+    if len(files) < constants.network_labels:
         constants.print_error(
-            f'Only {len(files)} classes found instead of at least {constants.n_labels}.'
+            f'Only {len(files)} classes found instead of at least {constants.network_labels}.'
         )
         exit(1)
     # Only data that is going to be used is included in the dataset.
-    files = files[: constants.n_labels]
+    files = files[: constants.network_labels]
     data_list = []
     labels_list = []
     label_names = []
@@ -277,7 +277,9 @@ class QuickDrawGenerator(Sequence):
         # Categorical Conversion (Issue #1)
         if self.categorical:
             # Converts integer labels to one-hot vectors
-            labels = keras.utils.to_categorical(labels, num_classes=constants.n_labels)
+            labels = keras.utils.to_categorical(
+                labels, num_classes=constants.network_labels
+            )
         return data, {'classifier': labels, 'decoder': data}
 
     def _get_data_from_h5(self, start, count):
@@ -329,7 +331,7 @@ class QuickDrawGenerator(Sequence):
         all_labels = np.concatenate(label_chunks, axis=0)
         if self.categorical:
             return keras.utils.to_categorical(
-                all_labels, num_classes=constants.n_labels
+                all_labels, num_classes=constants.network_labels
             )
 
         return all_labels

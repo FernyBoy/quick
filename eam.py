@@ -196,36 +196,6 @@ def plot_responses_graph(
     plt.savefig(graph_filename, dpi=600)
 
 
-def plot_features_graph(domain, means, stdevs, es):
-    """Draws the characterist shape of features per label.
-
-    The graph is a dots and lines graph with error bars denoting standard deviations.
-    """
-    ymin = np.PINF
-    ymax = np.NINF
-    for i in constants.all_n_labels:
-        yn = (means[i] - stdevs[i]).min()
-        yx = (means[i] + stdevs[i]).max()
-        ymin = ymin if ymin < yn else yn
-        ymax = ymax if ymax > yx else yx
-    main_step = 100.0 / domain
-    xrange = np.arange(0, 100, main_step)
-    fmts = constants.label_formats
-    for i in constants.all_n_labels:
-        plt.clf()
-        plt.figure(figsize=(12, 5))
-        plt.errorbar(xrange, means[i], fmt=fmts[i], yerr=stdevs[i], label=str(i))
-        plt.xlim(0, 100)
-        plt.ylim(ymin, ymax)
-        plt.xticks(xrange, labels='')
-        plt.xlabel(_('Features'))
-        plt.ylabel(_('Values'))
-        plt.legend(loc='right')
-        plt.grid(True)
-        filename = constants.features_name(es) + '-' + str(i).zfill(3) + _('-english')
-        plt.savefig(constants.figure_filename(filename, es), dpi=600)
-
-
 def plot_conf_matrix(matrix, xtags, ytags, name, es):
     plt.clf()
     plt.figure(figsize=(6.4, 4.8))
@@ -314,7 +284,7 @@ def load_features_and_labels(es, fold):
             filling_labels,
             testing_features,
             testing_labels,
-            constants.n_labels,
+            constants.memory_labels,
             es,
         )
     )
@@ -344,9 +314,7 @@ def save_history(history, prefix, es):
 
 def save_conf_matrix(matrix, prefix, es):
     name = prefix + constants.matrix_suffix
-    plot_conf_matrix(
-        matrix, range(constants.n_labels), range(constants.n_labels), name, es
-    )
+    plot_conf_matrix(matrix, range(matrix.shape[0]), range(matrix.shape[1]), name, es)
     filename = constants.data_filename(name, es)
     np.save(filename, matrix)
 
@@ -388,8 +356,10 @@ def load_learned_params(es):
 def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold, es):
     data = []
     labels = []
-    unknown = constants.n_labels
-    confrix = np.zeros((constants.n_labels, constants.n_labels + 1), dtype='int')
+    unknown = constants.network_labels
+    confrix = np.zeros(
+        (constants.memory_labels, constants.network_labels + 1), dtype='int'
+    )
     behaviour = np.zeros(constants.n_behaviours, dtype=np.float64)
     for features, label in zip(tef_rounded, tel):
         memory, recognized, _ = eam.recall(features)
@@ -417,7 +387,7 @@ def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold,
         - behaviour[constants.correct_response_idx]
     )
     behaviour[constants.correct_mis_response_idx] = np.sum(
-        [confrix[i, i] for i in range(threshold, constants.n_labels)]
+        [confrix[i, i] for i in range(threshold, constants.memory_labels)]
     )
     behaviour[constants.incorrect_mis_response_idx] = (
         np.sum(confrix[threshold:, :unknown])
@@ -548,7 +518,7 @@ def test_memory_sizes(domain, es):
                 filling_labels,
                 testing_labels,
                 classifier,
-                constants.n_labels,
+                constants.memory_labels,
                 es,
             )
             measures.append(results)
@@ -732,7 +702,7 @@ def test_filling_per_fold(mem_size, domain, es, fold):
             testing_labels,
             percent,
             classifier,
-            constants.n_labels,
+            constants.memory_labels,
             es,
         )
         # A list of tuples (position, label, features)
@@ -1014,7 +984,7 @@ def remember_with_sigma(eam, features, prefixes, msize, qd, es, fold):
     for i in range(len(classification)):
         # If the memory does not recognize it, it should not be classified.
         if not memories_recognition[i]:
-            classification[i] = constants.n_labels
+            classification[i] = constants.memory_labels
 
     features_filename = constants.data_filename(memories_prefix, es, fold)
     recognition_filename = constants.data_filename(recognition_prefix, es, fold)
@@ -1122,11 +1092,11 @@ if __name__ == '__main__':
         es.install()
 
     # Processing number of classes.
-    num_classes = constants.n_labels
+    num_classes = constants.memory_labels
     if args['--num-classes']:
         num_classes = int(args['--num-classes'])
         try:
-            constants.set_n_labels(num_classes)
+            constants.set_memory_labels(num_classes)
         except ValueError as e:
             print(e)
             sys.exit(1)
