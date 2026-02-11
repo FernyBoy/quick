@@ -146,10 +146,13 @@ def plot_responses_graph(
 ):
     response_idxs = [idx for idx in constants.response_behaviours]
     response_labels = [value for value in constants.response_behaviours.values()]
+    # Rows are memory sizes, and columns are behaviours. We select only the
+    # response behaviors, and normalize them to percentage of responses.
     means = mean_behaviours[:, response_idxs]
     stdvs = stdv_behaviours[:, response_idxs]
-    means = 100.0 * means / np.sum(means, axis=1)
-    stdvs = 100.0 * stdvs / np.sum(means, axis=1)
+    # Division along the rows, to get percentage of responses for each behavior.
+    means = 100.0 * means / np.sum(means, axis=1)[:, None]
+    stdvs = 100.0 * stdvs / np.sum(means, axis=1)[:, None]
 
     plt.clf()
     full_length = 100.0
