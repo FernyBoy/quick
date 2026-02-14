@@ -150,9 +150,12 @@ def plot_responses_graph(
     # response behaviors, and normalize them to percentage of responses.
     means = mean_behaviours[:, response_idxs]
     stdvs = stdv_behaviours[:, response_idxs]
-    # Division along the rows, to get percentage of responses for each behavior.
-    means = 100.0 * means / np.sum(means, axis=1)[:, None]
-    stdvs = 100.0 * stdvs / np.sum(means, axis=1)[:, None]
+    # We transpose behaviours, as we want to plot them as stacked bars.
+    means = means.transpose()
+    stdvs = stdvs.transpose()
+    # Division along the columns, to get percentage of responses for each behavior.
+    means = 100.0 * means / np.sum(means, axis=0)
+    stdvs = 100.0 * stdvs / np.sum(means, axis=0)
 
     plt.clf()
     full_length = 100.0
