@@ -318,10 +318,10 @@ def save_history(history, prefix, es):
         json.dump(stats, outfile)
 
 
-def save_conf_matrix(matrix, prefix, es):
+def save_conf_matrix(matrix, prefix):
     name = prefix + constants.matrix_suffix
-    plot_conf_matrix(matrix, range(matrix.shape[0]), range(matrix.shape[1]), name, es)
-    filename = constants.data_filename(name, es)
+    plot_conf_matrix(matrix, range(matrix.shape[0]), range(matrix.shape[1]), name, None)
+    filename = constants.data_filename(name)
     np.save(filename, matrix)
 
 
