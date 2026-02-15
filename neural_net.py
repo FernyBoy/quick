@@ -14,7 +14,6 @@
 
 import math
 import numpy as np
-import h5py
 import tensorflow as tf
 from keras import Model
 from keras.layers import (
@@ -153,7 +152,7 @@ def get_classifier(domain):
     return input_mem, classification
 
 
-def train_network(prefix, es):
+def train_network(prefix):
     confusion_matrix = np.zeros((constants.network_labels, constants.network_labels))
     histories = []
     strategy = tf.distribute.MirroredStrategy()
@@ -242,21 +241,21 @@ def train_network(prefix, es):
             num_classes=constants.network_labels,
         )
         print('Saving everything needed for the future...')
-        encoder.save(constants.encoder_filename(prefix, es, fold))
-        decoder.save(constants.decoder_filename(prefix, es, fold))
-        classifier.save(constants.classifier_filename(prefix, es, fold))
-        prediction_prefix = constants.classification_name(es)
-        prediction_filename = constants.data_filename(prediction_prefix, es, fold)
+        encoder.save(constants.encoder_filename(prefix, fold))
+        decoder.save(constants.decoder_filename(prefix, fold))
+        classifier.save(constants.classifier_filename(prefix, fold))
+        name = constants.classification_name()
+        prediction_filename = constants.data_filename(name, es=None, fold=fold)
         np.save(prediction_filename, predicted_labels)
     confusion_matrix = confusion_matrix.numpy()
     totals = confusion_matrix.sum(axis=1).reshape(-1, 1)
     return histories, confusion_matrix / totals
 
 
-def obtain_features(model_prefix, features_prefix, labels_prefix, data_prefix, es):
+def obtain_features(model_prefix, features_prefix, labels_prefix):
     for fold in range(constants.n_folds):
         # Load the encoder
-        filename = constants.encoder_filename(model_prefix, es, fold)
+        filename = constants.encoder_filename(model_prefix, fold)
         model = tf.keras.models.load_model(filename)
 
         # 1. Get Generators (which replace the raw data arrays)
@@ -276,10 +275,12 @@ def obtain_features(model_prefix, features_prefix, labels_prefix, data_prefix, e
                 verbose=1,
             )
             labels = gen.get_all_labels()
-            features_filename = constants.data_filename(
-                features_prefix + suffix, es, fold
+            features_filename = constants.shared_data_filename(
+                features_prefix + suffix, fold
             )
-            labels_filename = constants.data_filename(labels_prefix + suffix, es, fold)
+            labels_filename = constants.shared_data_filename(
+                labels_prefix + suffix, fold
+            )
 
             print('Saving features and labels ...')
             np.save(features_filename, features)

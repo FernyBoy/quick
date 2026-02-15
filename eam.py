@@ -130,7 +130,7 @@ def plot_metrics_graph(
     cbar.ax.set_xticklabels(entropy_labels)
     cbar.set_label(_('Entropy'))
 
-    graph_name = constants.graph_name(es) + '-metrics' + _('-english')
+    graph_name = constants.graph_name(es) + suffix + '-metrics' + _('-english')
     graph_filename = constants.figure_filename(graph_name, es, None)
     plt.savefig(graph_filename, dpi=600)
 
@@ -259,22 +259,22 @@ def filter_by_labels(
 def load_features_and_labels(es, fold):
     suffix = constants.filling_suffix
     filling_features_filename = constants.features_name(es) + suffix
-    filling_features_filename = constants.input_data_filename(
-        filling_features_filename, es, fold
+    filling_features_filename = constants.shared_data_filename(
+        filling_features_filename, fold
     )
     filling_labels_filename = constants.labels_name(es) + suffix
-    filling_labels_filename = constants.input_data_filename(
-        filling_labels_filename, es, fold
+    filling_labels_filename = constants.shared_data_filename(
+        filling_labels_filename, fold
     )
 
     suffix = constants.testing_suffix
     testing_features_filename = constants.features_name(es) + suffix
-    testing_features_filename = constants.input_data_filename(
-        testing_features_filename, es, fold
+    testing_features_filename = constants.shared_data_filename(
+        testing_features_filename, fold
     )
     testing_labels_filename = constants.labels_name(es) + suffix
-    testing_labels_filename = constants.input_data_filename(
-        testing_labels_filename, es, fold
+    testing_labels_filename = constants.shared_data_filename(
+        testing_labels_filename, fold
     )
 
     filling_features = np.load(filling_features_filename)
@@ -566,26 +566,26 @@ def test_memory_sizes(domain, es):
     stdv_confrixes = np.std(all_confrixes, axis=0)
 
     np.savetxt(
-        constants.csv_filename('memory_entropy', es, None),
+        constants.csv_filename('memory_entropy', es, sub_dir=constants.n_labels_path),
         all_entropies,
         delimiter=',',
     )
     np.savetxt(
-        constants.csv_filename('mean_behaviours', es, None),
+        constants.csv_filename('mean_behaviours', es, sub_dir=constants.n_labels_path),
         mean_behaviours,
         delimiter=',',
     )
     np.savetxt(
-        constants.csv_filename('stdv_behaviours', es, None),
+        constants.csv_filename('stdv_behaviours', es, sub_dir=constants.n_labels_path),
         stdv_behaviours,
         delimiter=',',
     )
     np.save(
-        constants.data_filename('mean_confrixes', es, None),
+        constants.data_filename('mean_confrixes', es, sub_dir=constants.n_labels_path),
         mean_confrixes,
     )
     np.save(
-        constants.data_filename('stdv_confrixes', es, None),
+        constants.data_filename('stdv_confrixes', es, sub_dir=constants.n_labels_path),
         stdv_confrixes,
     )
     plot_metrics_graph(
@@ -761,12 +761,12 @@ def test_memory_fills(domain, mem_sizes, es):
         main_avrge_accuracies = np.mean(total_accuracies, axis=0)
         main_stdev_accuracies = np.std(total_accuracies, axis=0)
 
-        suffix = constants.numeric_suffix('sze', mem_size)
+        suffix = '_mfills' + constants.numeric_suffix('sze', mem_size)
         np.savetxt(
             constants.csv_filename(
                 'main_average_precision' + suffix,
                 es,
-                None,
+                sub_dir=constants.n_labels_path,
             ),
             main_avrge_precisions,
             delimiter=',',
@@ -775,7 +775,7 @@ def test_memory_fills(domain, mem_sizes, es):
             constants.csv_filename(
                 'main_average_recall' + suffix,
                 es,
-                None,
+                sub_dir=constants.n_labels_path,
             ),
             main_avrge_recalls,
             delimiter=',',
@@ -784,7 +784,7 @@ def test_memory_fills(domain, mem_sizes, es):
             constants.csv_filename(
                 'main_average_accuracy' + suffix,
                 es,
-                None,
+                sub_dir=constants.n_labels_path,
             ),
             main_avrge_accuracies,
             delimiter=',',
@@ -793,7 +793,7 @@ def test_memory_fills(domain, mem_sizes, es):
             constants.csv_filename(
                 'main_average_entropy' + suffix,
                 es,
-                None,
+                sub_dir=constants.n_labels_path,
             ),
             main_avrge_entropies,
             delimiter=',',
@@ -802,7 +802,7 @@ def test_memory_fills(domain, mem_sizes, es):
             constants.csv_filename(
                 'main_stdev_precision' + suffix,
                 es,
-                None,
+                sub_dir=constants.n_labels_path,
             ),
             main_stdev_precisions,
             delimiter=',',
@@ -811,7 +811,7 @@ def test_memory_fills(domain, mem_sizes, es):
             constants.csv_filename(
                 'main_stdev_recall' + suffix,
                 es,
-                None,
+                sub_dir=constants.n_labels_path,
             ),
             main_stdev_recalls,
             delimiter=',',
@@ -820,7 +820,7 @@ def test_memory_fills(domain, mem_sizes, es):
             constants.csv_filename(
                 'main_stdev_accuracy' + suffix,
                 es,
-                None,
+                sub_dir=constants.n_labels_path,
             ),
             main_stdev_accuracies,
             delimiter=',',
@@ -829,7 +829,7 @@ def test_memory_fills(domain, mem_sizes, es):
             constants.csv_filename(
                 'main_stdev_entropy' + suffix,
                 es,
-                None,
+                sub_dir=constants.n_labels_path,
             ),
             main_stdev_entropies,
             delimiter=',',
@@ -1044,22 +1044,19 @@ def remember(msize, mfill, es):
 # region Main functionality functions ----------------------------------------------------
 
 
-def create_and_train_network(es):
-    model_prefix = constants.model_name(es)
+def create_and_train_network(_):
+    model_prefix = constants.model_name()
     stats_prefix = model_prefix + constants.classifier_suffix
-    history, conf_matrix = neural_net.train_network(model_prefix, es)
-    save_history(history, stats_prefix, es)
-    save_conf_matrix(conf_matrix, stats_prefix, es)
+    history, conf_matrix = neural_net.train_network(model_prefix)
+    save_history(history, stats_prefix)
+    save_conf_matrix(conf_matrix, stats_prefix)
 
 
-def produce_features_from_data(es):
-    model_prefix = constants.model_name(es)
-    features_prefix = constants.features_name(es)
-    labels_prefix = constants.labels_name(es)
-    data_prefix = constants.data_name(es)
-    neural_net.obtain_features(
-        model_prefix, features_prefix, labels_prefix, data_prefix, es
-    )
+def produce_features_from_data(_):
+    model_prefix = constants.model_name()
+    features_prefix = constants.features_name()
+    labels_prefix = constants.labels_name()
+    neural_net.obtain_features(model_prefix, features_prefix, labels_prefix)
 
 
 def run_evaluation(es):
@@ -1097,29 +1094,32 @@ if __name__ == '__main__':
         es = gettext.translation('eam', localedir='locale', languages=['es'])
         es.install()
 
-    # Processing number of classes.
-    num_classes = constants.memory_labels
-    if args['--num-classes']:
-        num_classes = int(args['--num-classes'])
-        try:
-            constants.set_memory_labels(num_classes)
-        except ValueError as e:
-            print(e)
-            sys.exit(1)
-
     # Processing memory size (columns)
     if args['--domain']:
         constants.domain = int(args['--domain'])
         assert 0 < constants.domain
+
     # Processing runpath.
     if args['--runpath']:
         constants.run_path = args['--runpath']
+
+    # Processing number of classes.
+    num_classes = constants.memory_labels
+    if args['--num-classes']:
+        try:
+            num_classes = int(args['--num-classes'])
+            constants.set_memory_labels(num_classes)
+            constants.n_labels_path = constants.int_suffix(num_classes)
+        except ValueError as e:
+            print(e)
+            sys.exit(1)
 
     prefix = constants.memory_parameters_prefix
     filename = constants.csv_filename(prefix)
     parameters = np.genfromtxt(filename, dtype=float, delimiter=',', skip_header=1)
     exp_settings = constants.ExperimentSettings(params=parameters)
     print(f'Working directory: {constants.run_path}')
+    print(f'Subworking directory: {constants.n_labels_path}')
     print(f'Experimental settings: {exp_settings}')
     print(f'Memory size (columns): {constants.domain}')
     print(f'Number of classes: {num_classes}')
