@@ -345,22 +345,17 @@ def create_directory(path):
         print(f'Directory {path} already exists.')
 
 
-def filename(name, es=None, fold=None, extension='', sub_dir=None):
+def filename(name, es=None, fold=None, extension='', sub_dir=''):
     """Returns a file name in run_path directory with a given extension and an index"""
     # Create target directory & all intermediate directories if don't exists
     try:
-        os.makedirs(run_path)
-        print('Directory ', run_path, ' created ')
+        dir_path = os.path.join(run_path, sub_dir)
+        os.makedirs(dir_path)
+        print(f'Directory {dir_path} created ')
     except FileExistsError:
         pass
-    sub_dir = '' if sub_dir is None else sub_dir + '/'
-    return (
-        run_path
-        + '/'
-        + sub_dir
-        + get_full_name(name, es)
-        + fold_suffix(fold)
-        + extension
+    return os.path.join(
+        dir_path, get_full_name(name, es) + fold_suffix(fold) + extension
     )
 
 
