@@ -497,7 +497,7 @@ def test_memory_sizes(domain, es):
         gc.collect()
         print(f'Fold: {fold}')
         # Loads the classifier neural network.
-        filename = constants.classifier_filename(model_prefix, es, fold)
+        filename = constants.classifier_filename(model_prefix, fold)
         classifier = tf.keras.models.load_model(filename)
 
         # Loads the full set of features and labels.
@@ -1109,7 +1109,7 @@ if __name__ == '__main__':
         try:
             num_classes = int(args['--num-classes'])
             constants.set_memory_labels(num_classes)
-            constants.n_labels_path = constants.int_suffix(num_classes)
+            constants.n_labels_path = constants.run_prefix + '_' + constants.int_suffix(num_classes)
         except ValueError as e:
             print(e)
             sys.exit(1)

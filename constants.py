@@ -273,7 +273,7 @@ def get_name_w_suffix(prefix):
     return prefix + suffix
 
 
-def get_full_name(name, es):
+def get_full_name(name, es=None):
     if es is None:
         return name
     suffix = exp_number_suffix(es)
