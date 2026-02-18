@@ -672,7 +672,7 @@ def test_filling_per_fold(mem_size, domain, es, fold):
         es,
     )
     model_prefix = constants.model_name(es)
-    filename = constants.classifier_filename(model_prefix, es, fold)
+    filename = constants.classifier_filename(model_prefix, fold)
     classifier = tf.keras.models.load_model(filename)
 
     filling_features, filling_labels, testing_features, testing_labels = (
@@ -984,7 +984,7 @@ def remember_with_sigma(eam, features, prefixes, msize, qd, es, fold):
     memories_weights = np.array(memories_weights, dtype=float)
 
     model_prefix = constants.model_name(es)
-    filename = constants.classifier_filename(model_prefix, es, fold)
+    filename = constants.classifier_filename(model_prefix, fold)
     classifier = tf.keras.models.load_model(filename)
     classification = np.argmax(classifier.predict(memories_features), axis=1)
     for i in range(len(classification)):
