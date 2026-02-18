@@ -359,6 +359,43 @@ def load_learned_params(es):
     return size_fill
 
 
+def calculate_metrics(behaviour, es):
+    if es.experiment_number == 1:
+        # In this case, threshold = number of labels, so we can consider that all responses
+        # are for the correct labels
+        total = (
+            behaviour[constants.correct_response_idx]
+            + behaviour[constants.incorrect_response_idx]
+            + behaviour[constants.no_response_idx]
+        )
+        responses = total - behaviour[constants.no_response_idx]
+        # If there are no responses, precision is undefined. Let's set it to 1.0.
+        precision = (
+            1.0
+            if responses == 0
+            else behaviour[constants.correct_response_idx] / float(responses)
+        )
+        recall = responses / float(total)
+        accuracy = behaviour[constants.correct_response_idx] / float(total)
+    elif es.experiment_number == 2:
+        TP = (
+            behaviour[constants.correct_response_idx]
+            + behaviour[constants.incorrect_response_idx]
+        )
+        FP = (
+            behaviour[constants.correct_mis_response_idx]
+            + behaviour[constants.incorrect_mis_response_idx]
+        )
+        FN = behaviour[constants.no_response]
+        TN = behaviour[constants.no_mis_response_idx]
+        print(f'TP:{TP}, FN:{FN}')
+        print(f'FP:{FP}, TN:{TN}')
+        precision = 1.0 if TP + FP == 0 else TP / float(TP + FP)
+        recall = TP / float(TP + FN)
+        accuracy = (TN + TP) / float(TP + FP + TN + FN)
+    return precision, recall, accuracy
+
+
 def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold, es):
     data = []
     labels = []
@@ -380,20 +417,17 @@ def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold,
         predictions = np.argmax(classifier.predict(data), axis=1)
         for correct, prediction in zip(labels, predictions):
             confrix[correct, prediction] += 1
-    behaviour[constants.no_response_idx] = np.sum(confrix[:, unknown])
-    behaviour[constants.correct_no_response_idx] = np.sum(confrix[threshold:, unknown])
-    behaviour[constants.incorrect_no_response_idx] = np.sum(
-        confrix[:threshold, unknown]
-    )
+    behaviour[constants.no_response_idx] = np.sum(confrix[:threshold, unknown])
+    behaviour[constants.no_mis_response] = np.sum(confrix[threshold:, unknown])
     behaviour[constants.correct_response_idx] = np.sum(
         [confrix[i, i] for i in range(threshold)]
+    )
+    behaviour[constants.correct_mis_response_idx] = np.sum(
+        [confrix[i, i] for i in range(threshold, constants.memory_labels)]
     )
     behaviour[constants.incorrect_response_idx] = (
         np.sum(confrix[:threshold, :unknown])
         - behaviour[constants.correct_response_idx]
-    )
-    behaviour[constants.correct_mis_response_idx] = np.sum(
-        [confrix[i, i] for i in range(threshold, constants.memory_labels)]
     )
     behaviour[constants.incorrect_mis_response_idx] = (
         np.sum(confrix[threshold:, :unknown])
@@ -401,6 +435,8 @@ def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold,
     )
     print('Confusion matrix:')
     constants.print_csv(confrix)
+    print('Behaviour:')
+    constants.print_csv(behaviour)
     return confrix, behaviour
 
 
@@ -449,34 +485,7 @@ def ams_size_results(
         threshold,
         es,
     )
-
-    # If there are no responses, precision is undefined. Let's set it to 0.
-    if es.experiment_number == 1:
-        responses = len(testing_labels) - behaviour[constants.no_response_idx]
-        precision = (
-            1.0
-            if responses == 0
-            else behaviour[constants.correct_response_idx] / float(responses)
-        )
-        recall = responses / float(len(testing_labels))
-        accuracy = behaviour[constants.correct_response_idx] / float(
-            len(testing_labels)
-        )
-    elif es.experiment_number == 2:
-        TP = (
-            behaviour[constants.correct_response_idx]
-            + behaviour[constants.incorrect_response_idx]
-        )
-        FP = (
-            behaviour[constants.correct_mis_response_idx]
-            + behaviour[constants.incorrect_mis_response_idx]
-        )
-        TN = behaviour[constants.correct_no_response_idx]
-        FN = behaviour[constants.incorrect_no_response_idx]
-        precision = 1.0 if TP + FP == 0 else TP / float(TP + FP)
-        recall = TP / float(TP + FN)
-        accuracy = (TN + TP) / float(TP + FP + TN + FN)
-
+    precision, recall, accuracy = calculate_metrics(behaviour, es)
     behaviour[constants.precision_idx] = precision
     behaviour[constants.accuracy_idx] = accuracy
     behaviour[constants.recall_idx] = recall
@@ -630,34 +639,7 @@ def test_filling_percent(
     _, behaviour = recognize_by_memory(
         eam, testing_features, testing_labels, msize, qd, classifier, threshold, es
     )
-    # If there are no responses, precision is undefined. Let's set it to 0.
-    if es.experiment_number == 1:
-        responses = len(testing_labels) - behaviour[constants.no_response_idx]
-        precision = (
-            1.0
-            if responses == 0
-            else behaviour[constants.correct_response_idx] / float(responses)
-        )
-        recall = responses / float(len(testing_labels))
-
-        accuracy = behaviour[constants.correct_response_idx] / float(
-            len(testing_labels)
-        )
-    elif es.experiment_number == 2:
-        TP = (
-            behaviour[constants.correct_response_idx]
-            + behaviour[constants.incorrect_response_idx]
-        )
-        FP = (
-            behaviour[constants.correct_mis_response_idx]
-            + behaviour[constants.incorrect_mis_response_idx]
-        )
-        TN = behaviour[constants.correct_no_response_idx]
-        FN = behaviour[constants.incorrect_no_response_idx]
-        precision = 1.0 if TP + FP == 0 else TP / float(TP + FP)
-        recall = TP / float(TP + FN)
-        accuracy = (TN + TP) / float(TP + FP + TN + FN)
-
+    precision, recall, accuracy = calculate_metrics(behaviour, es)
     behaviour[constants.precision_idx] = precision
     behaviour[constants.accuracy_idx] = accuracy
     behaviour[constants.recall_idx] = recall
@@ -1109,7 +1091,9 @@ if __name__ == '__main__':
         try:
             num_classes = int(args['--num-classes'])
             constants.set_memory_labels(num_classes)
-            constants.n_labels_path = constants.run_prefix + '_' + constants.int_suffix(num_classes)
+            constants.n_labels_path = (
+                constants.run_prefix + '_' + constants.int_suffix(num_classes)
+            )
         except ValueError as e:
             print(e)
             sys.exit(1)

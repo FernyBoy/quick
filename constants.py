@@ -160,21 +160,20 @@ recall_idx = 1
 accuracy_idx = 2
 entropy_idx = 3
 no_response_idx = 4
-correct_no_response_idx = 5
-incorrect_no_response_idx = 6
-correct_response_idx = 7
-incorrect_response_idx = 8
-correct_mis_response_idx = 9
-incorrect_mis_response_idx = 10
-n_behaviours = 11
+no_mis_response_idx = 5
+correct_response_idx = 6
+incorrect_response_idx = 7
+correct_mis_response_idx = 8
+incorrect_mis_response_idx = 9
+n_behaviours = 10
 
 response_behaviours = {
-    correct_no_response_idx: 'Correct No Response',
-    incorrect_no_response_idx: 'Incorrect No Response',
+    no_response_idx: 'No Response',
+    no_mis_response_idx: 'No Misresponse',
     correct_response_idx: 'Correct Response',
     incorrect_response_idx: 'Incorrect Response',
-    correct_mis_response_idx: 'Correct Mis Response',
-    incorrect_mis_response_idx: 'Incorrect Mis Response',
+    correct_mis_response_idx: 'Correct Misresponse',
+    incorrect_mis_response_idx: 'Incorrect Misresponse',
 }
 
 memory_sizes = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
