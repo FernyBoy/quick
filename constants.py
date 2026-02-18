@@ -348,6 +348,8 @@ def create_directory(path):
 def filename(name, es=None, fold=None, extension='', sub_dir=''):
     """Returns a file name in run_path directory with a given extension and an index"""
     # Create target directory & all intermediate directories if don't exists
+    if sub_dir is None:
+        sub_dir = ''
     try:
         dir_path = os.path.join(run_path, sub_dir)
         os.makedirs(dir_path)
