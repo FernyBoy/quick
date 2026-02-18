@@ -82,6 +82,7 @@ def plot_metrics_graph(
     es,
     xtitle=None,
     ytitle=None,
+    sub_dir=None,
 ):
     plt.clf()
     plt.figure(figsize=(6.4, 4.8))
@@ -131,7 +132,7 @@ def plot_metrics_graph(
     cbar.set_label(_('Entropy'))
 
     graph_name = constants.graph_name(es) + suffix + '-metrics' + _('-english')
-    graph_filename = constants.figure_filename(graph_name, es, None)
+    graph_filename = constants.figure_filename(graph_name, es, sub_dir)
     plt.savefig(graph_filename, dpi=600)
 
 
@@ -143,6 +144,7 @@ def plot_responses_graph(
     es,
     xtitle=None,
     ytitle=None,
+    sub_dir=None,
 ):
     response_idxs = [idx for idx in constants.response_behaviours]
     response_labels = [value for value in constants.response_behaviours.values()]
@@ -198,11 +200,11 @@ def plot_responses_graph(
     plt.grid(axis='y')
 
     graph_name = constants.graph_name(es) + '-responses' + suffix + _('-english')
-    graph_filename = constants.figure_filename(graph_name, es, None)
+    graph_filename = constants.figure_filename(graph_name, es, sub_dir)
     plt.savefig(graph_filename, dpi=600)
 
 
-def plot_conf_matrix(matrix, xtags, ytags, name, es):
+def plot_conf_matrix(matrix, xtags, ytags, name, es, sub_dir=None):
     plt.clf()
     plt.figure(figsize=(6.4, 4.8))
     seaborn.heatmap(
@@ -216,11 +218,11 @@ def plot_conf_matrix(matrix, xtags, ytags, name, es):
     )
     plt.xlabel(_('Prediction'))
     plt.ylabel(_('Label'))
-    filename = constants.figure_filename(name, es)
+    filename = constants.figure_filename(name, es, sub_dir)
     plt.savefig(filename, dpi=600)
 
 
-def plot_memory(memory: AssociativeMemory, name, es, fold):
+def plot_memory(memory: AssociativeMemory, name, es, fold, sub_dir=None):
     plt.clf()
     plt.figure(figsize=(6.4, 4.8))
     seaborn.heatmap(
@@ -232,7 +234,7 @@ def plot_memory(memory: AssociativeMemory, name, es, fold):
     )
     plt.xlabel(_('Characteristics'))
     plt.ylabel(_('Values'))
-    filename = constants.figure_filename(name, es, fold)
+    filename = constants.figure_filename(name, es, fold, sub_dir)
     plt.savefig(filename, dpi=600)
 
 
@@ -386,7 +388,7 @@ def calculate_metrics(behaviour, es):
             behaviour[constants.correct_mis_response_idx]
             + behaviour[constants.incorrect_mis_response_idx]
         )
-        FN = behaviour[constants.no_response]
+        FN = behaviour[constants.no_response_idx]
         TN = behaviour[constants.no_mis_response_idx]
         print(f'TP:{TP}, FN:{FN}')
         print(f'FP:{FP}, TN:{TN}')
@@ -418,7 +420,7 @@ def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold,
         for correct, prediction in zip(labels, predictions):
             confrix[correct, prediction] += 1
     behaviour[constants.no_response_idx] = np.sum(confrix[:threshold, unknown])
-    behaviour[constants.no_mis_response] = np.sum(confrix[threshold:, unknown])
+    behaviour[constants.no_mis_response_idx] = np.sum(confrix[threshold:, unknown])
     behaviour[constants.correct_response_idx] = np.sum(
         [confrix[i, i] for i in range(threshold)]
     )
@@ -608,6 +610,7 @@ def test_memory_sizes(domain, es):
         constants.memory_sizes,
         '_msizes',
         es,
+        sub_dir=constants.n_labels_path,
     )
     plot_responses_graph(
         mean_behaviours,
@@ -615,6 +618,7 @@ def test_memory_sizes(domain, es):
         constants.memory_sizes,
         '_msizes',
         es,
+        sub_dir=constants.n_labels_path,
     )
     print('Memory size evaluation completed!')
     return best_memory_sizes
@@ -829,6 +833,7 @@ def test_memory_fills(domain, mem_sizes, es):
             '_mfills' + suffix,
             es,
             xtitle=_('Percentage of memory corpus'),
+            sub_dir=constants.n_labels_path,
         )
 
         bf_idx = optimum_indexes(main_avrge_precisions, main_avrge_accuracies)
