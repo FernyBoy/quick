@@ -21,9 +21,10 @@ import re
 import sys
 import numpy as np
 
-# Directory where all results are stored.
 data_path = 'data/quick'
-run_path = 'runs'
+run_prefix = 'runs'
+run_path = run_prefix
+n_labels_path = None
 idx_digits = 3
 prep_hdf5_fname = 'prep_dataset.h5'
 prep_names_fname = 'prep_names.csv'
@@ -159,23 +160,30 @@ recall_idx = 1
 accuracy_idx = 2
 entropy_idx = 3
 no_response_idx = 4
-correct_no_response_idx = 5
-incorrect_no_response_idx = 6
-correct_response_idx = 7
-incorrect_response_idx = 8
-correct_mis_response_idx = 9
-incorrect_mis_response_idx = 10
-n_behaviours = 11
+no_mis_response_idx = 5
+correct_response_idx = 6
+incorrect_response_idx = 7
+correct_mis_response_idx = 8
+incorrect_mis_response_idx = 9
+n_behaviours = 10
 
 response_behaviours = {
-    correct_no_response_idx: 'Correct No Response',
-    incorrect_no_response_idx: 'Incorrect No Response',
     correct_response_idx: 'Correct Response',
     incorrect_response_idx: 'Incorrect Response',
-    correct_mis_response_idx: 'Correct Mis Response',
-    incorrect_mis_response_idx: 'Incorrect Mis Response',
+    no_response_idx: 'No Response',
+    correct_mis_response_idx: 'Correct Misresponse',
+    incorrect_mis_response_idx: 'Incorrect Misresponse',
+    no_mis_response_idx: 'No Misresponse',
 }
 
+response_colors = {
+    correct_response_idx: 'green',
+    incorrect_response_idx: 'orange',
+    no_response_idx: 'blue',
+    correct_mis_response_idx: 'red',
+    incorrect_mis_response_idx: 'purple',
+    no_mis_response_idx: 'olive',
+}
 memory_sizes = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
 memory_fills = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 100.0]
 n_best_memory_sizes = 2
@@ -237,6 +245,210 @@ class ExperimentSettings:
         return f'ExperimentSettings(iota={self.iota}, kappa={self.kappa}, xi={self.xi}, sigma={self.sigma})'
 
 
+def int_suffix(n, prefix=None):
+    prefix = '' if prefix is None else '-' + prefix + '_'
+    return prefix + str(n).zfill(3)
+
+
+def float_suffix(x, prefix=None):
+    prefix = '' if prefix is None else '-' + prefix + '_'
+    return prefix + f'{x:.2f}'
+
+
+def numeric_suffix(prefix, value):
+    return '-' + prefix + '_' + str(value).zfill(3)
+
+
+def exp_number_suffix(es):
+    return '' if es.experiment_number == 0 else int_suffix(es.experiment_number, 'exp')
+
+
+def fold_suffix(fold):
+    return '' if fold is None else int_suffix(fold, 'fld')
+
+
+def msize_suffix(msize):
+    return int_suffix(msize, 'msz')
+
+
+def fill_suffix(fill):
+    return int_suffix(fill, 'fil')
+
+
+def get_name_w_suffix(prefix):
+    suffix = ''
+    return prefix + suffix
+
+
+def get_full_name(name, es=None):
+    if es is None:
+        return name
+    suffix = exp_number_suffix(es)
+    return name + suffix
+
+
+# Currently, names include nothing about experiment settings.
+def model_name(es=None):
+    return model_prefix
+
+
+def stats_model_name(es=None):
+    return stats_prefix
+
+
+def features_name(es=None):
+    return features_prefix
+
+
+def labels_name(es=None):
+    return labels_prefix
+
+
+def mem_params_name(es=None):
+    return memory_parameters_prefix
+
+
+def data_name(es=None):
+    return data_prefix
+
+
+def memories_name(es=None):
+    return memories_prefix
+
+
+def recognition_name(es=None):
+    return recognition_prefix
+
+
+def weights_name(es=None):
+    return weights_prefix
+
+
+def classification_name(es=None):
+    return classification_prefix
+
+
+def learn_params_name(es=None):
+    return learn_params_prefix
+
+
+def graph_name(es=None):
+    return graph_prefix
+
+
+def dirname(path):
+    match = re.search('[^/]*$', path)
+    if match is None:
+        return path
+    tuple = os.path.splitext(match.group(0))
+    return os.path.dirname(path) if tuple[1] else path
+
+
+def create_directory(path):
+    try:
+        os.makedirs(path)
+        print(f'Directory {path} created.')
+    except FileExistsError:
+        print(f'Directory {path} already exists.')
+
+
+def filename(name, es=None, fold=None, extension='', sub_dir=''):
+    """Returns a file name in run_path directory with a given extension and an index"""
+    # Create target directory & all intermediate directories if don't exists
+    if sub_dir is None:
+        sub_dir = ''
+    try:
+        dir_path = os.path.join(run_path, sub_dir)
+        os.makedirs(dir_path)
+        print(f'Directory {dir_path} created ')
+    except FileExistsError:
+        pass
+    return os.path.join(
+        dir_path, get_full_name(name, es) + fold_suffix(fold) + extension
+    )
+
+
+def csv_filename(name_prefix, es=None, fold=None, sub_dir=None):
+    return filename(name_prefix, es, fold, '.csv', sub_dir)
+
+
+def data_filename(name_prefix, es=None, fold=None, sub_dir=None):
+    return filename(name_prefix, es, fold, '.npy', sub_dir)
+
+
+def figure_filename(name_prefix, es, fold=None, sub_dir=None):
+    return filename(name_prefix, es, fold, '.svg', sub_dir)
+
+
+def shared_data_filename(name_prefix, fold=None):
+    """Returns a file name for an INPUT npy file, always in the main run_path."""
+    return data_filename(name_prefix, fold=fold)
+
+
+def json_filename(name_prefix, es):
+    return filename(name_prefix, es, extension='.json')
+
+
+# region Functions for naming files for storing neural networks.
+# Names of this files do not depend on experimental settings.
+
+
+def model_filename(name_prefix, fold):
+    # This function will always point to the main runs directory
+    return os.path.join(run_path, get_full_name(name_prefix) + fold_suffix(fold))
+
+
+def encoder_filename(name_prefix, fold):
+    return model_filename(name_prefix + encoder_suffix, fold) + '.keras'
+
+
+def classifier_filename(name_prefix, fold):
+    return model_filename(name_prefix + classifier_suffix, fold) + '.keras'
+
+
+def decoder_filename(name_prefix, fold):
+    return model_filename(name_prefix + decoder_suffix, fold) + '.keras'
+
+
+# endregion Functions for naming files for storing neural networks.
+
+
+def image_filename(dirname, idx, label, suffix='', es=None, fold=None):
+    """Provides a file name for an image that it is either the input data or
+    the output of the memory system"""
+    name_prefix = (
+        image_path
+        + '/'
+        + dirname
+        + '/'
+        + str(label).zfill(3)
+        + '_'
+        + str(idx).zfill(5)
+        + suffix
+    )
+    return filename(name_prefix, es, fold, extension='.png')
+
+
+def testing_image_filename(path, idx, label, es, fold):
+    return image_filename(path, idx, label, original_suffix, es, fold)
+
+
+def prod_testing_image_filename(dir, idx, label, es, fold):
+    return image_filename(dir, idx, label, testing_suffix, es, fold)
+
+
+def memory_image_filename(dir, idx, label, es, fold):
+    return image_filename(dir, idx, label, memory_suffix, es, fold)
+
+
+def print_csv(data):
+    writer = csv.writer(sys.stdout)
+    if np.ndim(data) == 1:
+        writer.writerow(data)
+    else:
+        writer.writerows(data)
+
+
 def print_warning(*s):
     print('WARNING:', *s, file=sys.stderr)
 
@@ -256,286 +468,3 @@ def print_counter(n, every, step=1, symbol='.', prefix=''):
     if e == 0:
         counter = ' ' + prefix + str(n) + ' '
     print(counter, end='', flush=True)
-
-
-def int_suffix(n, prefix=None):
-    prefix = '' if prefix is None else '-' + prefix + '_'
-    return prefix + str(n).zfill(3)
-
-
-def float_suffix(x, prefix=None):
-    prefix = '' if prefix is None else '-' + prefix + '_'
-    return prefix + f'{x:.2f}'
-
-
-def extended_suffix(extended):
-    return '-ext' if extended else ''
-
-
-def numeric_suffix(prefix, value):
-    return '-' + prefix + '_' + str(value).zfill(3)
-
-
-def exp_number_suffix(es):
-    return '' if es.experiment_number == 0 else int_suffix(es.experiment_number, 'exp')
-
-
-def fold_suffix(fold):
-    return '' if fold is None else int_suffix(fold, 'fld')
-
-
-def learned_suffix(learned):
-    return int_suffix(learned, 'lrn')
-
-
-def stage_suffix(stage):
-    return int_suffix(stage, 'stg')
-
-
-def msize_suffix(msize):
-    return int_suffix(msize, 'msz')
-
-
-def sigma_suffix(sigma):
-    return float_suffix(sigma, 'sgm')
-
-
-def dream_depth_suffix(cycle):
-    return numeric_suffix('dph', cycle)
-
-
-def get_name_w_suffix(prefix):
-    suffix = ''
-    return prefix + suffix
-
-
-def get_full_name(prefix, es):
-    if es is None:
-        return prefix
-    name = get_name_w_suffix(prefix)
-    return name
-
-
-# Currently, names include nothing about experiment settings.
-def model_name(es):
-    return model_prefix
-
-
-def stats_model_name(es):
-    return stats_prefix
-
-
-def data_name(es):
-    return data_prefix
-
-
-def features_name(es):
-    return features_prefix
-
-
-def labels_name(es):
-    return labels_prefix
-
-
-def mem_params_name(es):
-    return memory_parameters_prefix
-
-
-def memories_name(es):
-    return memories_prefix + exp_number_suffix(es)
-
-
-def recognition_name(es):
-    return recognition_prefix + exp_number_suffix(es)
-
-
-def weights_name(es):
-    return weights_prefix + exp_number_suffix(es)
-
-
-def classification_name(es):
-    return classification_prefix + exp_number_suffix(es)
-
-
-def learn_params_name(es):
-    return learn_params_prefix + exp_number_suffix(es)
-
-
-def graph_name(es):
-    return graph_prefix + exp_number_suffix(es)
-
-
-def dirname(path):
-    match = re.search('[^/]*$', path)
-    if match is None:
-        return path
-    tuple = os.path.splitext(match.group(0))
-    return os.path.dirname(path) if tuple[1] else path
-
-
-def create_directory(path):
-    try:
-        os.makedirs(path)
-        print(f'Directory {path} created.')
-    except FileExistsError:
-        print(f'Directory {path} already exists.')
-
-
-def filename(name_prefix, es=None, fold=None, extension='', sub_dir=None):
-    """Returns a file name in run_path directory with a given extension and an index"""
-    # Create target directory & all intermediate directories if don't exists
-    try:
-        os.makedirs(run_path)
-        print('Directory ', run_path, ' created ')
-    except FileExistsError:
-        pass
-    sub_dir = '' if sub_dir is None else sub_dir + '/'
-    return (
-        run_path
-        + '/'
-        + sub_dir
-        + get_full_name(name_prefix, es)
-        + fold_suffix(fold)
-        + extension
-    )
-
-
-def csv_filename(name_prefix, es=None, fold=None, sub_dir=None):
-    return filename(name_prefix, es, fold, '.csv', sub_dir)
-
-
-def data_filename(name_prefix, es=None, fold=None, sub_dir=None):
-    return filename(name_prefix, es, fold, '.npy', sub_dir)
-
-
-def input_data_filename(name_prefix, es=None, fold=None):
-    """Returns a file name for an INPUT npy file, always in the main run_path."""
-    return os.path.join(
-        run_path, get_full_name(name_prefix, es) + fold_suffix(fold) + '.npy'
-    )
-
-
-def json_filename(name_prefix, es):
-    return filename(name_prefix, es, extension='.json')
-
-
-def pickle_filename(name_prefix, es=None, fold=None):
-    return filename(name_prefix, es, fold, '.pkl')
-
-
-def figure_filename(name_prefix, es, fold=None, sub_dir=None):
-    return filename(name_prefix, es, fold, extension='.svg', sub_dir=sub_dir)
-
-
-def image_filename(prefix, idx, label, suffix='', es=None, fold=None):
-    name_prefix = (
-        image_path
-        + '/'
-        + prefix
-        + '/'
-        + str(label).zfill(3)
-        + '_'
-        + str(idx).zfill(5)
-        + suffix
-    )
-    return filename(name_prefix, es, fold, extension='.png')
-
-
-def learned_data_filename(suffix, es, fold):
-    prefix = learning_data_learned + suffix + data_suffix
-    return data_filename(prefix, es, fold)
-
-
-def learned_labels_filename(suffix, es, fold):
-    prefix = learning_data_learned + suffix + labels_suffix
-    return data_filename(prefix, es, fold)
-
-
-def seed_data_filename():
-    return data_filename(learning_data_seed + data_suffix)
-
-
-def seed_labels_filename():
-    return data_filename(learning_data_seed + labels_suffix)
-
-
-def model_filename(name_prefix, es, fold):
-    # This function will always point to the main runs directory
-    return os.path.join(run_path, get_full_name(name_prefix, es) + fold_suffix(fold))
-
-
-def encoder_filename(name_prefix, es, fold):
-    return model_filename(name_prefix + encoder_suffix, es, fold) + '.keras'
-
-
-def classifier_filename(name_prefix, es, fold):
-    return model_filename(name_prefix + classifier_suffix, es, fold) + '.keras'
-
-
-def decoder_filename(name_prefix, es, fold):
-    return model_filename(name_prefix + decoder_suffix, es, fold) + '.keras'
-
-
-def memory_confrix_filename(fill, es, fold):
-    prefix = mem_conf_prefix + int_suffix(fill, 'fll')
-    return data_filename(prefix, es, fold)
-
-
-def recog_filename(name_prefix, es, fold):
-    return csv_filename(name_prefix, es, fold)
-
-
-def testing_image_filename(path, idx, label, es, fold):
-    return image_filename(path, idx, label, original_suffix, es, fold)
-
-
-def prod_testing_image_filename(dir, idx, label, es, fold):
-    return image_filename(dir, idx, label, testing_suffix, es, fold)
-
-
-def memory_image_filename(dir, idx, label, es, fold):
-    return image_filename(dir, idx, label, memory_suffix, es, fold)
-
-
-def mean_idx(m):
-    return m
-
-
-def std_idx(m):
-    return m + 1
-
-
-def padding_cropping(data, n_frames):
-    frames, _ = data.shape
-    df = frames - n_frames
-    if df < 0:
-        return []
-    elif df == 0:
-        return [data]
-    else:
-        features = []
-        for i in range(df + 1):
-            features.append(data[i : i + n_frames, :])
-        return features
-
-
-def get_data_in_range(data, i, j):
-    if j > i:
-        return data[i:j]
-    else:
-        pre = data[i:]
-        pos = data[:j]
-        if len(pre) == 0:
-            return pos
-        elif len(pos) == 0:
-            return pre
-        else:
-            return np.concatenate((pre, pos), axis=0)
-
-
-def print_csv(data):
-    writer = csv.writer(sys.stdout)
-    if np.ndim(data) == 1:
-        writer.writerow(data)
-    else:
-        writer.writerows(data)
