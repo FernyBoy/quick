@@ -132,7 +132,7 @@ def plot_metrics_graph(
     cbar.set_label(_('Entropy'))
 
     graph_name = constants.graph_name(es) + suffix + '-metrics' + _('-english')
-    graph_filename = constants.figure_filename(graph_name, es, sub_dir)
+    graph_filename = constants.figure_filename(graph_name, es, sub_dir=sub_dir)
     plt.savefig(graph_filename, dpi=600)
 
 
@@ -200,7 +200,7 @@ def plot_responses_graph(
     plt.grid(axis='y')
 
     graph_name = constants.graph_name(es) + '-responses' + suffix + _('-english')
-    graph_filename = constants.figure_filename(graph_name, es, sub_dir)
+    graph_filename = constants.figure_filename(graph_name, es, sub_dir=sub_dir)
     plt.savefig(graph_filename, dpi=600)
 
 
@@ -246,19 +246,16 @@ def plot_memory(memory: AssociativeMemory, name, es, fold, sub_dir=None):
 def filter_by_labels(
     filling_features, filling_labels, testing_features, testing_labels, threshold, es
 ):
-    mask = testing_labels < threshold
+    mask = testing_labels < constants.memory_labels
     testing_labels = testing_labels[mask]
     testing_features = testing_features[mask]
-    if es.experiment_number == 2:
-        threshold //= 2
-        print(f'Adjusted threshold = {threshold}')
     mask = filling_labels < threshold
     filling_labels = filling_labels[mask]
     filling_features = filling_features[mask]
     return filling_features, filling_labels, testing_features, testing_labels
 
 
-def load_features_and_labels(es, fold):
+def load_features_and_labels(threshold, es, fold):
     suffix = constants.filling_suffix
     filling_features_filename = constants.features_name(es) + suffix
     filling_features_filename = constants.shared_data_filename(
@@ -292,7 +289,7 @@ def load_features_and_labels(es, fold):
             filling_labels,
             testing_features,
             testing_labels,
-            constants.memory_labels,
+            threshold,
             es,
         )
     )
@@ -362,6 +359,7 @@ def load_learned_params(es):
 
 
 def calculate_metrics(behaviour, es):
+    print(f'Calculating metrics for experiment {es.experiment_number}...')
     if es.experiment_number == 1:
         # In this case, threshold = number of labels, so we can consider that all responses
         # are for the correct labels
@@ -395,6 +393,8 @@ def calculate_metrics(behaviour, es):
         precision = 1.0 if TP + FP == 0 else TP / float(TP + FP)
         recall = TP / float(TP + FN)
         accuracy = (TN + TP) / float(TP + FP + TN + FN)
+    else:
+        raise ValueError(f'Unknown experiment number: {es.experiment_number}')
     return precision, recall, accuracy
 
 
@@ -419,6 +419,9 @@ def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold,
         predictions = np.argmax(classifier.predict(data), axis=1)
         for correct, prediction in zip(labels, predictions):
             confrix[correct, prediction] += 1
+    print(
+        f'Calculating responses for experiment {es.experiment_number} and threshold {threshold}...'
+    )
     behaviour[constants.no_response_idx] = np.sum(confrix[:threshold, unknown])
     behaviour[constants.no_mis_response_idx] = np.sum(confrix[threshold:, unknown])
     behaviour[constants.correct_response_idx] = np.sum(
@@ -512,8 +515,9 @@ def test_memory_sizes(domain, es):
         classifier = tf.keras.models.load_model(filename)
 
         # Loads the full set of features and labels.
+        threshold = constants.memory_labels // es.experiment_number
         filling_features, filling_labels, testing_features, testing_labels = (
-            load_features_and_labels(es, fold)
+            load_features_and_labels(threshold, es, fold)
         )
         print('Filtered data:')
         print(f'\tFilling data shape: {filling_features.shape}')
@@ -535,7 +539,7 @@ def test_memory_sizes(domain, es):
                 filling_labels,
                 testing_labels,
                 classifier,
-                constants.memory_labels,
+                threshold,
                 es,
             )
             measures.append(results)
@@ -661,6 +665,7 @@ def test_filling_per_fold(mem_size, domain, es, fold):
     filename = constants.classifier_filename(model_prefix, fold)
     classifier = tf.keras.models.load_model(filename)
 
+    threshold = constants.memory_labels // es.experiment_number
     filling_features, filling_labels, testing_features, testing_labels = (
         load_features_and_labels(es, fold)
     )
@@ -694,7 +699,7 @@ def test_filling_per_fold(mem_size, domain, es, fold):
             testing_labels,
             percent,
             classifier,
-            constants.memory_labels,
+            threshold,
             es,
         )
         # A list of tuples (position, label, features)
