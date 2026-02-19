@@ -168,14 +168,22 @@ incorrect_mis_response_idx = 9
 n_behaviours = 10
 
 response_behaviours = {
-    no_response_idx: 'No Response',
-    no_mis_response_idx: 'No Misresponse',
     correct_response_idx: 'Correct Response',
     incorrect_response_idx: 'Incorrect Response',
+    no_response_idx: 'No Response',
     correct_mis_response_idx: 'Correct Misresponse',
     incorrect_mis_response_idx: 'Incorrect Misresponse',
+    no_mis_response_idx: 'No Misresponse',
 }
 
+response_colors = {
+    correct_response_idx: 'green',
+    incorrect_response_idx: 'orange',
+    no_response_idx: 'blue',
+    correct_mis_response_idx: 'red',
+    incorrect_mis_response_idx: 'purple',
+    no_mis_response_idx: 'olive',
+}
 memory_sizes = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
 memory_fills = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 100.0]
 n_best_memory_sizes = 2

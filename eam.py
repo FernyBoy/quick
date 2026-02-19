@@ -102,9 +102,9 @@ def plot_metrics_graph(
     # Replace undefined precision with 1.0.
     pre_mean = np.nan_to_num(pre_mean, copy=False, nan=100.0)
 
-    plt.errorbar(x, pre_mean, fmt='r-o', yerr=pre_std, label=_('Precision'))
-    plt.errorbar(x, rec_mean, fmt='g-^', yerr=rec_std, label=_('Recall'))
-    plt.errorbar(x, acc_mean, fmt='b--s', yerr=acc_std, label=_('Accuracy'))
+    plt.errorbar(x, acc_mean, fmt='b-s', yerr=acc_std, label=_('Accuracy'))
+    plt.errorbar(x, pre_mean, fmt='r--o', yerr=pre_std, label=_('Precision'))
+    plt.errorbar(x, rec_mean, fmt='g:^', yerr=rec_std, label=_('Recall'))
     plt.xlim(0, xmax)
     plt.ylim(0, ymax)
     plt.xticks(x, xlabels)
@@ -147,7 +147,8 @@ def plot_responses_graph(
     sub_dir=None,
 ):
     response_idxs = [idx for idx in constants.response_behaviours]
-    response_labels = [value for value in constants.response_behaviours.values()]
+    response_labels = [constants.response_labels[idx] for idx in response_idxs]
+    response_colors = [constants.response_colors[idx] for idx in response_idxs]
     # Rows are memory sizes, and columns are behaviours. We select only the
     # response behaviors, and normalize them to percentage of responses.
     means = mean_behaviours[:, response_idxs]
@@ -172,7 +173,9 @@ def plot_responses_graph(
     width = 5  # the width of the bars: can also be len(x) sequence
 
     cum = np.zeros(len(constants.memory_sizes), dtype=float)
-    for values, errors, label in zip(means, stdvs, response_labels):
+    for values, errors, color, label in zip(
+        means, stdvs, response_colors, response_labels
+    ):
         total = np.sum(values)
         if total > 0:
             plt.bar(
@@ -182,6 +185,7 @@ def plot_responses_graph(
                 bottom=cum,
                 label=label,
                 yerr=errors,
+                color=color,
             )
             cum += values
 
@@ -667,7 +671,7 @@ def test_filling_per_fold(mem_size, domain, es, fold):
 
     threshold = constants.memory_labels // es.experiment_number
     filling_features, filling_labels, testing_features, testing_labels = (
-        load_features_and_labels(es, fold)
+        load_features_and_labels(threshold, es, fold)
     )
     print('Filtered data:')
     print(f'Filling data shape: {filling_features.shape}')
