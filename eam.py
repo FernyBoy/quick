@@ -147,7 +147,7 @@ def plot_responses_graph(
     sub_dir=None,
 ):
     response_idxs = [idx for idx in constants.response_behaviours]
-    response_labels = [constants.response_labels[idx] for idx in response_idxs]
+    response_labels = [constants.response_behaviours[idx] for idx in response_idxs]
     response_colors = [constants.response_colors[idx] for idx in response_idxs]
     # Rows are memory sizes, and columns are behaviours. We select only the
     # response behaviors, and normalize them to percentage of responses.
