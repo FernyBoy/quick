@@ -451,6 +451,11 @@ def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold,
         np.sum(confrix[threshold:, :unknown])
         - behaviour[constants.correct_mis_response_idx]
     )
+    print('Confusion matrix:')
+    constants.print_csv(confrix)
+    print('Behaviour:')
+    constants.print_csv(behaviour)
+
     return confrix, behaviour
 
 
