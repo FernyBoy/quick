@@ -403,36 +403,45 @@ def calculate_metrics(behaviour, es):
 
 
 def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold, es):
-    data = []
-    labels = []
     unknown = constants.network_labels
     confrix = np.zeros(
         (constants.memory_labels, constants.network_labels + 1), dtype='int'
     )
     behaviour = np.zeros(constants.n_behaviours, dtype=np.float64)
-    for features, label in zip(tef_rounded, tel):
-        memory, recognized, _ = eam.recall(features)
-        if recognized:
-            mem = qd.dequantize(memory, msize)
-            data.append(mem)
-            labels.append(label)
-        else:
-            confrix[label, unknown] += 1
-    if len(labels) > 0:
-        data = np.array(data)
-        predictions = np.argmax(classifier.predict(data), axis=1)
-        for correct, prediction in zip(labels, predictions):
-            confrix[correct, prediction] += 1
-    print(
-        f'Calculating responses for experiment {es.experiment_number} and threshold {threshold}...'
-    )
+
+    memories, recognized_mask, _ = eam.batch_recall(tef_rounded)
+    # Increments 'unknown' column for all labels that failed recognition
+    unrecognized_labels = tel[~recognized_mask]
+    if unrecognized_labels.size > 0:
+        counts = np.bincount(unrecognized_labels, minlength=constants.memory_labels)
+        confrix[:, unknown] += counts
+
+    # Handles Recognized Cues
+    if np.any(recognized_mask):
+        rec_memories = memories[recognized_mask]
+        rec_labels = tel[recognized_mask]
+
+        # Batch Dequantize and Predict
+        data = qd.dequantize(rec_memories, msize)
+        # Using a larger batch_size in predict() for GPU efficiency
+        predictions = np.argmax(
+            classifier.predict(data, batch_size=constants.batch_size, verbose=0), axis=1
+        )
+
+        # Fast Confusion Matrix Update
+        # Instead of a loop, we use 'add.at' for indexed accumulation
+        np.add.at(confrix, (rec_labels, predictions), 1)
+
+    # Calculates metrics based on the confusion matrix
     behaviour[constants.no_response_idx] = np.sum(confrix[:threshold, unknown])
     behaviour[constants.no_mis_response_idx] = np.sum(confrix[threshold:, unknown])
-    behaviour[constants.correct_response_idx] = np.sum(
-        [confrix[i, i] for i in range(threshold)]
+    behaviour[constants.correct_response_idx] = np.trace(
+        confrix[:threshold, :threshold]
     )
-    behaviour[constants.correct_mis_response_idx] = np.sum(
-        [confrix[i, i] for i in range(threshold, constants.memory_labels)]
+    behaviour[constants.correct_mis_response_idx] = np.trace(
+        confrix[
+            threshold : constants.memory_labels, threshold : constants.memory_labels
+        ]
     )
     behaviour[constants.incorrect_response_idx] = (
         np.sum(confrix[:threshold, :unknown])
@@ -442,10 +451,6 @@ def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold,
         np.sum(confrix[threshold:, :unknown])
         - behaviour[constants.correct_mis_response_idx]
     )
-    print('Confusion matrix:')
-    constants.print_csv(confrix)
-    print('Behaviour:')
-    constants.print_csv(behaviour)
     return confrix, behaviour
 
 

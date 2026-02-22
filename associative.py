@@ -207,6 +207,11 @@ class AssociativeMemory:
         cues: A 2D array of shape (number_of_samples, n)
         """
         cues = np.asanyarray(cues)
+        if cues.shape[-1] != self.n:
+            raise ValueError(
+                'Invalid size of the input data. '
+                + f'Expected {self.n} and given {cues.shape[-1]}'
+            )
 
         # Runs the validation for the whole batch
         # (Updated to handle 2D inputs)
@@ -254,6 +259,51 @@ class AssociativeMemory:
         r_io = self.revalidate(r_io)
         return r_io, recognized, weight
 
+    def batch_recall(self, cues):
+        """
+        Performs recognition and production for a batch of cues.
+        cues: (S, n) array of quantized values.
+        Returns: (memories, recognized_mask)
+        """
+        cues = np.asanyarray(cues)
+        if cues.shape[-1] != self.n:
+            raise ValueError(
+                'Invalid size of the input data. '
+                + f'Expected {self.n} and given {cues.shape[-1]}'
+            )
+        # Runs the validation for the whole batch
+        # (Updated to handle 2D inputs)
+        cues = np.where(cues >= self.m, self.m - 1, cues)
+        cues = np.where(cues < 0, 0, cues)
+        cues = np.nan_to_num(cues, copy=True, nan=self.undefined).astype(int)
+
+        # Advanced indexing to get iota-relation values for all samples/features
+        # self.iota_relation is (n, m), cues is (S, n)
+        # matches[s, i] will be 1 if the cue value at feature i is recognized, 0 otherwise.
+        features = np.arange(self.n)
+        matches = self.iota_relation[features, cues]
+
+        # For undefined values (cue == self.undefined), they shouldn't count as mismatches.
+        # We force them to '1' (match) so they don't affect the sum.
+        matches = np.where(cues == self.undefined, 1, matches)
+
+        # Calculate mismatches per sample and compare to xi
+        mismatches = self.n - np.sum(matches, axis=1)
+        recognized_mask = mismatches <= self.xi
+
+        valid_mask = cues != self.undefined
+        weights = np.zeros_like(cues, dtype=float)
+
+        # Efficiently pull weights for all samples and all features
+        weights[valid_mask] = self.relation[features, cues[valid_mask].T].T
+
+        # 2. Vectorized Production
+        # We only need to produce memories for recognized cues to save time,
+        # but for simplicity in the batch flow, we can produce all and filter later.
+        memories = self.batch_produce(cues)
+
+        return memories, recognized_mask, weights
+
     def abstract(self, r_io) -> None:
         self._relation = np.where(
             self._relation == self.absolute_max_value,
@@ -297,6 +347,35 @@ class AssociativeMemory:
         # Handle rows with zero total weight (fallback to undefined)
         v = np.where(totals == 0, self.undefined, v)
         return v
+
+    def batch_produce(self, cues):
+        """Vectorized version of the constructive retrieval operation.
+
+        It assumes cues is a 2D array of shape (S, n) where S is the number of samples
+        and n is the number of features. It returns an array of shape (S, n) with the produced memories."""
+        S, n = cues.shape
+        m = self.m
+
+        # Gaussian modulation (S, n, m)
+        j_indices = np.arange(m)
+        distances_sq = (j_indices[None, None, :] - cues[:, :, None]) ** 2
+        gauss = np.exp(-distances_sq / (2 * self._sigma_scaled**2))
+
+        # Apply to relation: (n, m) broadcast to (S, n, m)
+        weights = self.relation[None, :, :m] * gauss
+
+        # Handle undefined cues (use raw relation row)
+        defined_mask = (cues != self.undefined)[:, :, None]
+        weights = np.where(defined_mask, weights, self.relation[None, :, :m])
+
+        # Sampling via CumSum
+        cumsum_weights = weights.cumsum(axis=2)
+        totals = cumsum_weights[:, :, -1]
+        r = np.random.rand(S, n) * totals
+
+        # Find indices where cumsum exceeds random value
+        v = (cumsum_weights < r[:, :, None]).sum(axis=2)
+        return np.where(totals == 0, m, v)  # Return undefined index if no weights
 
     def _normalize(self, column, mean, std, scale):
         norm = np.array([normpdf(i, mean, std, scale) for i in range(self.m)])
