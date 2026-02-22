@@ -402,6 +402,33 @@ def calculate_metrics(behaviour, es):
     return precision, recall, accuracy
 
 
+def chunked_batch_recall(eam, cues, batch_size=constants.batch_size):
+    """
+    Processes large data in chunks to avoid memory errors.
+    Returns concatenated memories, masks, and weights.
+    """
+    all_memories = []
+    all_masks = []
+    all_weights = []
+
+    # Iterate through the data in chunks
+    for i in range(0, len(cues), batch_size):
+        chunk = cues[i : i + batch_size]
+
+        # Call the optimized batch_recall from AssociativeMemory
+        mem, mask, weight = eam.batch_recall(chunk)
+
+        all_memories.append(mem)
+        all_masks.append(mask)
+        all_weights.append(weight)
+
+    final_memories = np.vstack(all_memories)
+    final_masks = np.concatenate(all_masks)
+    final_weights = np.vstack(all_weights)
+
+    return final_memories, final_masks, final_weights
+
+
 def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold, es):
     unknown = constants.network_labels
     confrix = np.zeros(
@@ -409,7 +436,7 @@ def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold,
     )
     behaviour = np.zeros(constants.n_behaviours, dtype=np.float64)
 
-    memories, recognized_mask, _ = eam.batch_recall(tef_rounded)
+    memories, recognized_mask, _ = chunked_batch_recall(tef_rounded)
     # Increments 'unknown' column for all labels that failed recognition
     unrecognized_labels = tel[~recognized_mask]
     if unrecognized_labels.size > 0:
