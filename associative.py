@@ -17,7 +17,6 @@
 
 import math
 import numpy as np
-
 import constants
 
 
@@ -279,9 +278,13 @@ class AssociativeMemory:
 
         # Force weights of undefined cues to 0.0
         weights = np.where(cues == self.undefined, 0.0, weights)
-        print(f'Weights shape: {weights.shape}, Weights sample: {weights[0]}')
+        constants.print_debug(
+            f'Weights shape: {weights.shape}, Weights sample: {weights[0]}'
+        )
         weights = np.mean(weights, axis=1)  # Average weight per sample
-        print(f'Weights shape: {weights.shape}, Weights sample: {weights[0]}')
+        constants.print_debug(
+            f'Weights shape: {weights.shape}, Weights sample: {weights[0]}'
+        )
 
         # 5. Vectorized Production
         memories = self.batch_produce(cues)
