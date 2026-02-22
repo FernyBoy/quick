@@ -277,31 +277,32 @@ class AssociativeMemory:
         cues = np.where(cues < 0, 0, cues)
         cues = np.nan_to_num(cues, copy=True, nan=self.undefined).astype(int)
 
-        # Advanced indexing to get iota-relation values for all samples/features
-        # self.iota_relation is (n, m), cues is (S, n)
-        # matches[s, i] will be 1 if the cue value at feature i is recognized, 0 otherwise.
-        features = np.arange(self.n)
+        # Creates broadcastable features indices
+        # Shape: (1, n). This allows NumPy to pair each feature index
+        # with the corresponding column in 'cues' for EVERY sample.
+        features = np.arange(self.n)[None, :]
+
+        # Vectorizes recognition (using iota_relation)
+        # This produces an (S, n) matrix of 1s and 0s
         matches = self.iota_relation[features, cues]
 
-        # For undefined values (cue == self.undefined), they shouldn't count as mismatches.
-        # We force them to '1' (match) so they don't affect the sum.
+        # Undefined values do not count as mismatches
         matches = np.where(cues == self.undefined, 1, matches)
 
-        # Calculate mismatches per sample and compare to xi
+        # Calculates recognized_mask (S,) using tolerance parameter xi
         mismatches = self.n - np.sum(matches, axis=1)
         recognized_mask = mismatches <= self.xi
 
-        valid_mask = cues != self.undefined
-        weights = np.zeros_like(cues, dtype=float)
+        # Vectorizeds Weights Calculation
+        # It pulls relation[i, cues[s, i]] for all samples 's' and features 'i'.
+        weights = self.relation[features, cues].astype(float)
 
-        # Efficiently pull weights for all samples and all features
-        weights[valid_mask] = self.relation[features, cues[valid_mask].T].T
+        # Force weights of undefined cues to 0.0
+        weights = np.where(cues == self.undefined, 0.0, weights)
+        weights = np.mean(weights, axis=1)  # Average weight per sample
 
-        # 2. Vectorized Production
-        # We only need to produce memories for recognized cues to save time,
-        # but for simplicity in the batch flow, we can produce all and filter later.
+        # 5. Vectorized Production
         memories = self.batch_produce(cues)
-
         return memories, recognized_mask, weights
 
     def abstract(self, r_io) -> None:
