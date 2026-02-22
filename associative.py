@@ -16,7 +16,6 @@
 # File originally create by Raul Peralta-Lozada.
 
 import math
-import random
 import numpy as np
 
 import constants
@@ -203,29 +202,29 @@ class AssociativeMemory:
         self.abstract(r_io)
 
     def recognize(self, cue, validate=True):
-        recognized, weights = self.recog_weights(cue, validate)
-        return recognized, np.mean(weights)
+        recognized, weight = self.recog_weight(cue, validate)
+        return recognized, weight
 
-    def recog_weights(self, cue, validate=True):
+    def recog_weight(self, cue, validate=True):
         vector = self.validate(cue) if validate else cue
         recognized = self._mismatches(vector) <= self.xi
-        weights = self._weights(vector)
-        recognized = recognized and (self.kappa * self.mean <= np.mean(weights))
-        return recognized, weights
+        weight = np.mean(self._weights(vector))
+        recognized = recognized and (self.kappa * self.mean <= weight)
+        return recognized, weight
 
     def recall(self, cue=None):
         if cue is None:
             cue = np.full(self.n, np.nan)
-        r_io, recognized, weights = self.recall_weights(cue)
-        return r_io, recognized, np.mean(weights)
+        r_io, recognized, weight = self.recall_weights(cue)
+        return r_io, recognized, weight
 
     def recall_weights(self, cue, validate=True):
         vector = self.validate(cue) if validate else cue
-        recognized, _ = self.recog_weights(vector, validate=False)
+        recognized, _ = self.recog_weight(vector, validate=False)
         r_io = self.produce(vector) if recognized else np.full(self.n, self.undefined)
-        weights = self._weights(r_io)
+        weight = np.mean(self._weights(r_io))
         r_io = self.revalidate(r_io)
-        return r_io, recognized, weights
+        return r_io, recognized, weight
 
     def abstract(self, r_io) -> None:
         self._relation = np.where(
@@ -243,26 +242,33 @@ class AssociativeMemory:
     def containment(self, r_io):
         return ~r_io[:, : self.m] | self.iota_relation
 
-    # Reduces the relation in memory to a function, given a cue
     def produce(self, cue):
-        v = np.array([self.choose(i, cue[i]) for i in range(self.n)])
-        return v
+        j_indices = np.arange(self.m)
 
-    # Choose a value for feature i.
-    def choose(self, i, v):
-        if self.is_undefined(v):
-            column = self.relation[i, :]
-        else:
-            column = self._normalize(
-                self.relation[i, :], v, self._sigma_scaled, self._scale
-            )
-        s = column.sum()
-        r = s * random.random()
-        for j in range(self.m):
-            if r < column[j]:
-                return j
-            r -= column[j]
-        return self.m - 1
+        # Identify which features have defined values, and
+        # get float values of the relation for optimization with nump.
+        defined_mask = ~self.is_undefined(cue)
+        weights = self.relation.astype(float)
+
+        if np.any(defined_mask):
+            # Calculate Gaussian windows for all features simultaneously
+            dist_sq = (j_indices[None, :] - cue[:, None]) ** 2
+            gauss = np.exp(-dist_sq / (2 * self._sigma_scaled**2))
+
+            # Modulate only the rows with defined cues
+            weights[defined_mask] *= gauss[defined_mask]
+
+        # Generate random values scaled by the total weight of each row
+        cumsum_weights = weights.cumsum(axis=1)
+        totals = cumsum_weights[:, -1]
+        r = np.random.rand(self.n) * totals
+
+        # Find the first index where cumsum exceeds the random value
+        v = (cumsum_weights < r[:, None]).sum(axis=1)
+
+        # Handle rows with zero total weight (fallback to undefined)
+        v = np.where(totals == 0, self.undefined, v)
+        return v
 
     def _normalize(self, column, mean, std, scale):
         norm = np.array([normpdf(i, mean, std, scale) for i in range(self.m)])
@@ -297,11 +303,12 @@ class AssociativeMemory:
         return np.mean(self._weights(vector))
 
     def _weights(self, vector):
-        weights = []
-        for i in range(self.n):
-            w = 0 if self.is_undefined(vector[i]) else self.relation[i, vector[i]]
-            weights.append(w)
-        return np.array(weights)
+        # Use advanced indexing to pull all weights in one step
+        mask = ~self.is_undefined(vector)
+        weights = np.zeros(self.n)
+        # np.arange(self.n)[mask] ensures we only index valid rows
+        weights[mask] = self.relation[np.arange(self.n)[mask], vector[mask]]
+        return weights
 
     def is_undefined(self, value):
         return value == self.undefined
@@ -335,3 +342,15 @@ class AssociativeMemory:
                 count = np.count_nonzero(column)
                 mean = self.iota * s / count
                 self._iota_relation[i, :] = np.where(column < mean, 0, column)
+
+    def _update_iota_relation(self):
+        # Calculates the sum and the count of non-zero entries per column
+        sums = self._relation.sum(axis=1, keepdims=True)
+        counts = np.count_nonzero(self._relation, axis=1).reshape(-1, 1)
+
+        # Avoid division by zero for empty rows
+        counts = np.where(counts == 0, 1, counts)
+        thresholds = self.iota * sums / counts
+
+        # Apply thresholding to the entire table at once
+        self._iota_relation = np.where(self._relation < thresholds, 0, self._relation)
