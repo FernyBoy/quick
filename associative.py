@@ -201,6 +201,34 @@ class AssociativeMemory:
         r_io = self.to_relation(vector)
         self.abstract(r_io)
 
+    def batch_register(self, cues) -> None:
+        """
+        Registers a batch of cues (e.g., an entire dataset) at once.
+        cues: A 2D array of shape (number_of_samples, n)
+        """
+        cues = np.asanyarray(cues)
+
+        # Runs the validation for the whole batch
+        # (Updated to handle 2D inputs)
+        v = np.where(cues >= self.m, self.m - 1, cues)
+        v = np.where(v < 0, 0, v)
+        v = np.nan_to_num(v, copy=True, nan=self.undefined).astype(int)
+
+        # Aggregates counts for each feature-value pair
+        # For each column (row, feature), we count how many times each value appears in the batch
+        batch_counts = np.zeros((self._n, self._m), dtype=int)
+        for i in range(self._n):
+            # bincount is extremely fast for this operation
+            batch_counts[i] = np.bincount(v[:, i], minlength=self._m)
+
+        # Adds all counts to the relation and clip at the absolute maximum value
+        # This replaces the iterative np.where calls
+        new_relation = self._relation.astype(float) + batch_counts
+        self._relation = np.clip(new_relation, 0, self.absolute_max_value).astype(int)
+
+        # Flag that means/entropies need recalculation
+        self._updated = False
+
     def recognize(self, cue, validate=True):
         recognized, weight = self.recog_weight(cue, validate)
         return recognized, weight
@@ -285,7 +313,8 @@ class AssociativeMemory:
         considerers any negative number or out of range number
         as undefined.
         """
-        if len(cue) != self.n:
+        cue = np.asanyarray(cue)
+        if cue.shape[-1] != self.n:
             raise ValueError(
                 'Invalid size of the input data. '
                 + f'Expected {self.n} and given {cue.size}'

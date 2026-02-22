@@ -479,8 +479,7 @@ def ams_size_results(
     print(f'Testing features shape = {tf_rounded.shape}')
     print('--------------------------------------------')
     print('Filling the memory...', end='', flush=True)
-    for features in ff_rounded:
-        eam.register(features)
+    eam.batch_register(ff_rounded)
     print('done.')
 
     # Recognize test data.
@@ -645,8 +644,7 @@ def test_filling_percent(
     es,
 ):
     # Registrate filling data.
-    for features in filling_features:
-        eam.register(features)
+    eam.batch_register(filling_features)
     print(f'Filling of memories done at {percent}%')
     _, behaviour = recognize_by_memory(
         eam, testing_features, testing_labels, msize, qd, classifier, threshold, es
@@ -1026,8 +1024,7 @@ def remember(msize, mfill, es):
             es,
         )
         end = round(len(filling_features) * mfill / 100.0)
-        for features in filling_rounded[:end]:
-            eam.register(features)
+        eam.batch_register(filling_rounded[:end])
         print(f'Memory of size {msize} filled with {end} elements for fold {fold}')
 
         for features, prefixes in zip([testing_rounded], prefixes_list):
