@@ -196,35 +196,25 @@ class AssociativeMemory:
         self._xi = x
         self._updated = False
 
-    def register(self, cue) -> None:
-        vector = self.validate(cue)
+    def register(self, value) -> None:
+        vector = self.validate(value)
         r_io = self.to_relation(vector)
         self.abstract(r_io)
 
-    def batch_register(self, cues) -> None:
+    def batch_register(self, values) -> None:
         """
-        Registers a batch of cues (e.g., an entire dataset) at once.
-        cues: A 2D array of shape (number_of_samples, n)
+        Registers a batch of values (e.g., an entire dataset) at once.
+        values: A 2D array of shape (number_of_samples, n)
         """
-        cues = np.asanyarray(cues)
-        if cues.shape[-1] != self.n:
-            raise ValueError(
-                'Invalid size of the input data. '
-                + f'Expected {self.n} and given {cues.shape[-1]}'
-            )
-
-        # Runs the validation for the whole batch
-        # (Updated to handle 2D inputs)
-        v = np.where(cues >= self.m, self.m - 1, cues)
-        v = np.where(v < 0, 0, v)
-        v = np.nan_to_num(v, copy=True, nan=self.undefined).astype(int)
+        values = np.asanyarray(values)
+        values = self.batch_validate(values)
 
         # Aggregates counts for each feature-value pair
         # For each column (row, feature), we count how many times each value appears in the batch
         batch_counts = np.zeros((self._n, self._m), dtype=int)
         for i in range(self._n):
             # bincount is extremely fast for this operation
-            batch_counts[i] = np.bincount(v[:, i], minlength=self._m)
+            batch_counts[i] = np.bincount(values[:, i], minlength=self._m)
 
         # Adds all counts to the relation and clip at the absolute maximum value
         # This replaces the iterative np.where calls
@@ -265,17 +255,7 @@ class AssociativeMemory:
         cues: (S, n) array of quantized values.
         Returns: (memories, recognized_mask)
         """
-        cues = np.asanyarray(cues)
-        if cues.shape[-1] != self.n:
-            raise ValueError(
-                'Invalid size of the input data. '
-                + f'Expected {self.n} and given {cues.shape[-1]}'
-            )
-        # Runs the validation for the whole batch
-        # (Updated to handle 2D inputs)
-        cues = np.where(cues >= self.m, self.m - 1, cues)
-        cues = np.where(cues < 0, 0, cues)
-        cues = np.nan_to_num(cues, copy=True, nan=self.undefined).astype(int)
+        cues = self.batch_validate(cues)
 
         # Creates broadcastable features indices
         # Shape: (1, n). This allows NumPy to pair each feature index
@@ -299,7 +279,9 @@ class AssociativeMemory:
 
         # Force weights of undefined cues to 0.0
         weights = np.where(cues == self.undefined, 0.0, weights)
+        print(f'Weights shape: {weights.shape}, Weights sample: {weights[0]}')
         weights = np.mean(weights, axis=1)  # Average weight per sample
+        print(f'Weights shape: {weights.shape}, Weights sample: {weights[0]}')
 
         # 5. Vectorized Production
         memories = self.batch_produce(cues)
@@ -403,6 +385,19 @@ class AssociativeMemory:
         v = np.where(v < 0, 0, v)
         v = np.nan_to_num(v, copy=True, nan=self.undefined)
         return v.astype('int')
+
+    def batch_validate(self, cues):
+        if cues.shape[-1] != self.n:
+            raise ValueError(
+                'Invalid size of the input data. '
+                + f'Expected {self.n} and given {cues.shape[-1]}'
+            )
+        # Runs the validation for the whole batch
+        # (Updated to handle 2D inputs)
+        cues = np.where(cues >= self.m, self.m - 1, cues)
+        cues = np.where(cues < 0, 0, cues)
+        cues = np.nan_to_num(cues, copy=True, nan=self.undefined).astype(int)
+        return cues
 
     def revalidate(self, vector):
         v = vector.astype('float')
