@@ -59,6 +59,7 @@ class AssociativeMemory:
         self._xi = es.xi
         self._sigma = es.sigma
         self._sigma_scaled = es.sigma * m
+        self._gauss_bank = None  # To be computed on demand for optimization
         self._iota = es.iota
         self._kappa = es.kappa
         self._scale = 1.0 / normpdf(0, 0, self._sigma_scaled)
@@ -162,6 +163,19 @@ class AssociativeMemory:
         self._sigma = s
         self._sigma_scaled = abs(s * self.m)
         self._scale = normpdf(0, 0, self._sigma_scaled)
+        self._gauss_bank = None  # Invalidate precomputed bank
+
+    def _get_gauss_bank(self):
+        """Precomputes Gaussian windows for all possible cue values."""
+        if self._gauss_bank is None:
+            # Bank shape: (m + 1, m). Each row v is the Gaussian window for cue value v.
+            v_indices = np.arange(self.m + 1)
+            j_indices = np.arange(self.m)
+            dist_sq = (j_indices[None, :] - v_indices[:, None]) ** 2
+            self._gauss_bank = np.exp(-dist_sq / (2 * self._sigma_scaled**2))
+            # The last row (v = undefined) results in no modulation (raw relation)
+            self._gauss_bank[self.m, :] = 1.0
+        return self._gauss_bank
 
     @property
     def kappa(self):
@@ -249,45 +263,33 @@ class AssociativeMemory:
         return r_io, recognized, weight
 
     def batch_recall(self, cues):
-        """
-        Performs recognition and production for a batch of cues.
-        cues: (S, n) array of quantized values.
-        Returns: (memories, recognized_mask)
-        """
+        """Vectorized recognition and conditional production."""
         cues = self.batch_validate(cues)
-
-        # Creates broadcastable features indices
-        # Shape: (1, n). This allows NumPy to pair each feature index
-        # with the corresponding column in 'cues' for EVERY sample.
         features = np.arange(self.n)[None, :]
 
-        # Vectorizes recognition (using iota_relation)
-        # This produces an (S, n) matrix of 1s and 0s
-        matches = self.iota_relation[features, cues]
-
-        # Undefined values do not count as mismatches
-        matches = np.where(cues == self.undefined, 1, matches)
-
-        # Calculates recognized_mask (S,) using tolerance parameter xi
+        # Recognition: Iota Condition (Containment)
+        # Uses _iota_relation directly to handle 'undefined' indices safely
+        matches = self._iota_relation[features, cues]
+        matches = np.where(cues == self.undefined, 0, matches)
         mismatches = self.n - np.sum(matches, axis=1)
         recognized_mask = mismatches <= self.xi
 
-        # Vectorizeds Weights Calculation
-        # It pulls relation[i, cues[s, i]] for all samples 's' and features 'i'.
-        weights = self.relation[features, cues].astype(float)
+        # Recognition: Kappa Condition (Average Weight)
+        # Uses _relation directly to handle 'undefined' indices safely
+        weights_per_feature = self._relation[features, cues].astype(float)
+        weights_per_feature = np.where(cues == self.undefined, 0.0, weights_per_feature)
+        weights = np.mean(weights_per_feature, axis=1)
 
-        # Force weights of undefined cues to 0.0
-        weights = np.where(cues == self.undefined, 0.0, weights)
-        constants.print_debug(
-            f'Weights shape: {weights.shape}, Weights sample: {weights[0]}'
-        )
-        weights = np.mean(weights, axis=1)  # Average weight per sample
-        constants.print_debug(
-            f'Weights shape: {weights.shape}, Weights sample: {weights[0]}'
-        )
+        # Combined Recognition Mask
+        recognized_mask &= weights >= self.kappa * self.mean
 
-        # 5. Vectorized Production
-        memories = self.batch_produce(cues)
+        # 3. Production: ONLY for recognized cues
+        memories = np.full(cues.shape, self.undefined, dtype=int)
+        if np.any(recognized_mask):
+            rec_indices = np.where(recognized_mask)[0]
+            # Call production only for recognized samples
+            memories[rec_indices] = self.batch_produce(cues[rec_indices])
+
         return memories, recognized_mask, weights
 
     def abstract(self, r_io) -> None:
@@ -335,33 +337,24 @@ class AssociativeMemory:
         return v
 
     def batch_produce(self, cues):
-        """Vectorized version of the constructive retrieval operation.
-
-        It assumes cues is a 2D array of shape (S, n) where S is the number of samples
-        and n is the number of features. It returns an array of shape (S, n) with the produced memories."""
+        """Optimized constructive retrieval using precomputed Gaussian bank."""
         S, n = cues.shape
         m = self.m
 
-        # Gaussian modulation (S, n, m)
-        j_indices = np.arange(m)
-        distances_sq = (j_indices[None, None, :] - cues[:, :, None]) ** 2
-        gauss = np.exp(-distances_sq / (2 * self._sigma_scaled**2))
+        # Use precomputed bank indexing: (S, n, m)
+        # This replaces np.exp calculation for every sample
+        gauss = self._get_gauss_bank()[cues]
 
         # Apply to relation: (n, m) broadcast to (S, n, m)
-        weights = self.relation[None, :, :m] * gauss
+        weights = self._relation[None, :, :m] * gauss
 
-        # Handle undefined cues (use raw relation row)
-        defined_mask = (cues != self.undefined)[:, :, None]
-        weights = np.where(defined_mask, weights, self.relation[None, :, :m])
-
-        # Sampling via CumSum
+        # Sampling logic
         cumsum_weights = weights.cumsum(axis=2)
         totals = cumsum_weights[:, :, -1]
         r = np.random.rand(S, n) * totals
 
-        # Find indices where cumsum exceeds random value
         v = (cumsum_weights < r[:, :, None]).sum(axis=2)
-        return np.where(totals == 0, m, v)  # Return undefined index if no weights
+        return np.where(totals == 0, m, v)
 
     def _normalize(self, column, mean, std, scale):
         norm = np.array([normpdf(i, mean, std, scale) for i in range(self.m)])

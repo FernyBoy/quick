@@ -409,21 +409,22 @@ def chunked_batch_recall(eam, cues, batch_size=constants.batch_size):
     """
     all_memories = []
     all_masks = []
+    all_weights = []
 
     # Iterate through the data in chunks
     for i in range(0, len(cues), batch_size):
         chunk = cues[i : i + batch_size]
 
         # Call the optimized batch_recall from AssociativeMemory
-        mem, mask, _ = eam.batch_recall(chunk)
+        mems, masks, weights = eam.batch_recall(chunk)
+        all_memories.append(mems)
+        all_masks.append(masks)
+        all_weights.append(weights)
 
-        all_memories.append(mem)
-        all_masks.append(mask)
-
-    final_memories = np.vstack(all_memories)
-    final_masks = np.concatenate(all_masks)
-
-    return final_memories, final_masks
+    all_memories = np.vstack(all_memories)
+    all_masks = np.concatenate(all_masks)
+    all_weights = np.vstack(all_weights)
+    return all_memories, all_masks, all_weights
 
 
 def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold, es):
@@ -452,9 +453,13 @@ def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold,
             classifier.predict(data, batch_size=constants.batch_size, verbose=0), axis=1
         )
 
-        # Fast Confusion Matrix Update
-        # Instead of a loop, we use 'add.at' for indexed accumulation
-        np.add.at(confrix, (rec_labels, predictions), 1)
+        # High-speed confusion matrix update using bincount
+        # Maps (label, pred) pairs to a flat index
+        flat_indices = rec_labels * (unknown + 1) + predictions
+        counts = np.bincount(
+            flat_indices, minlength=constants.memory_labels * (unknown + 1)
+        )
+        confrix += counts.reshape(confrix.shape)
 
     # Calculates metrics based on the confusion matrix
     behaviour[constants.no_response_idx] = np.sum(confrix[:threshold, unknown])
