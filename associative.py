@@ -270,7 +270,7 @@ class AssociativeMemory:
         # Recognition: Iota Condition (Containment)
         # Uses _iota_relation directly to handle 'undefined' indices safely
         matches = self._iota_relation[features, cues]
-        matches = np.where(cues == self.undefined, 0, matches)
+        matches = np.where(cues == self.undefined, 1, matches)
         mismatches = self.n - np.sum(matches, axis=1)
         recognized_mask = mismatches <= self.xi
 

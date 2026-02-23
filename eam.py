@@ -423,7 +423,7 @@ def chunked_batch_recall(eam, cues, batch_size=constants.batch_size):
 
     all_memories = np.vstack(all_memories)
     all_masks = np.concatenate(all_masks)
-    all_weights = np.vstack(all_weights)
+    all_weights = np.concatenate(all_weights)
     return all_memories, all_masks, all_weights
 
 
@@ -434,7 +434,7 @@ def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold,
     )
     behaviour = np.zeros(constants.n_behaviours, dtype=np.float64)
 
-    memories, recognized_mask = chunked_batch_recall(eam, tef_rounded)
+    memories, recognized_mask, _ = chunked_batch_recall(eam, tef_rounded)
     # Increments 'unknown' column for all labels that failed recognition
     unrecognized_labels = tel[~recognized_mask]
     if unrecognized_labels.size > 0:
