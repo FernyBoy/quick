@@ -427,9 +427,10 @@ def chunked_batch_recall(eam, cues, batch_size=constants.batch_size):
     return all_memories, all_masks, all_weights
 
 
-def recognize_by_memory_batchmode(
-    eam, tef_rounded, tel, msize, qd, classifier, threshold, es
-):
+def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold, es):
+    """Recognizes the test data using the associative memory and updates the confusion matrix.
+
+    It does so processing the data in batches (to avoid memory errors) rather than one by one."""
     unknown = constants.network_labels
     confrix = np.zeros(
         (constants.memory_labels, constants.network_labels + 1), dtype='int'
@@ -490,7 +491,9 @@ def recognize_by_memory_batchmode(
     return confrix, behaviour
 
 
-def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold, es):
+def recognize_by_memory_one_by_one(
+    eam, tef_rounded, tel, msize, qd, classifier, threshold, es
+):
     data = []
     labels = []
     unknown = constants.network_labels

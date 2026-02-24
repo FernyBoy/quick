@@ -271,8 +271,11 @@ class AssociativeMemory:
         # Recognition: Iota Condition (Containment)
         # Uses _iota_relation directly to handle 'undefined' indices safely
         matches = self._iota_relation[features, cues]
-        matches = np.where(cues == self.undefined, 1, matches)
-        mismatches = self.n - np.sum(matches, axis=1)
+        # A mismatch happens strictly when the cell is 0 AND the cue is defined
+        is_mismatch = (matches == 0) & (cues != self.undefined)
+
+        # Count the mismatches per sample
+        mismatches = np.sum(is_mismatch, axis=1)
         recognized_mask = mismatches <= self.xi
 
         # Recognition: Kappa Condition (Average Weight)
