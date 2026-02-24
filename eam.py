@@ -427,7 +427,9 @@ def chunked_batch_recall(eam, cues, batch_size=constants.batch_size):
     return all_memories, all_masks, all_weights
 
 
-def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold, es):
+def recognize_by_memory_batchmode(
+    eam, tef_rounded, tel, msize, qd, classifier, threshold, es
+):
     unknown = constants.network_labels
     confrix = np.zeros(
         (constants.memory_labels, constants.network_labels + 1), dtype='int'
@@ -485,6 +487,53 @@ def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold,
     print('Behaviour:')
     constants.print_csv(behaviour)
 
+    return confrix, behaviour
+
+
+def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold, es):
+    data = []
+    labels = []
+    unknown = constants.network_labels
+    confrix = np.zeros(
+        (constants.memory_labels, constants.network_labels + 1), dtype='int'
+    )
+    behaviour = np.zeros(constants.n_behaviours, dtype=np.float64)
+    for features, label in zip(tef_rounded, tel):
+        memory, recognized, _ = eam.recall(features)
+        if recognized:
+            mem = qd.dequantize(memory, msize)
+            data.append(mem)
+            labels.append(label)
+        else:
+            confrix[label, unknown] += 1
+    if len(labels) > 0:
+        data = np.array(data)
+        predictions = np.argmax(classifier.predict(data), axis=1)
+        for correct, prediction in zip(labels, predictions):
+            confrix[correct, prediction] += 1
+    print(
+        f'Calculating responses for experiment {es.experiment_number} and threshold {threshold}...'
+    )
+    behaviour[constants.no_response_idx] = np.sum(confrix[:threshold, unknown])
+    behaviour[constants.no_mis_response_idx] = np.sum(confrix[threshold:, unknown])
+    behaviour[constants.correct_response_idx] = np.sum(
+        [confrix[i, i] for i in range(threshold)]
+    )
+    behaviour[constants.correct_mis_response_idx] = np.sum(
+        [confrix[i, i] for i in range(threshold, constants.memory_labels)]
+    )
+    behaviour[constants.incorrect_response_idx] = (
+        np.sum(confrix[:threshold, :unknown])
+        - behaviour[constants.correct_response_idx]
+    )
+    behaviour[constants.incorrect_mis_response_idx] = (
+        np.sum(confrix[threshold:, :unknown])
+        - behaviour[constants.correct_mis_response_idx]
+    )
+    print('Confusion matrix:')
+    constants.print_csv(confrix)
+    print('Behaviour:')
+    constants.print_csv(behaviour)
     return confrix, behaviour
 
 
