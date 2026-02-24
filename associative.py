@@ -53,6 +53,7 @@ class AssociativeMemory:
             the number of characteristics.
         """
         self._n = n
+        # We need an extra feature to represent the 'undefined' value, so we use m+1 internally.
         self._m = m + 1
         if es is None:
             es = constants.ExperimentSettings()
@@ -367,9 +368,8 @@ class AssociativeMemory:
 
     def validate(self, cue):
         """It asumes vector is an array of floats, and np.nan
-        may be used to register an undefined value, but it also
-        considerers any negative number or out of range number
-        as undefined.
+        may be used to register an undefined value. Values out of
+        range are clipped to the closest valid value.
         """
         cue = np.asanyarray(cue)
         if cue.shape[-1] != self.n:
@@ -377,8 +377,7 @@ class AssociativeMemory:
                 'Invalid size of the input data. '
                 + f'Expected {self.n} and given {cue.size}'
             )
-        v = np.where(cue >= self.m, self.m - 1, cue)
-        v = np.where(v < 0, 0, v)
+        v = np.clip(cue, 0, self.m - 1)
         v = np.nan_to_num(v, copy=True, nan=self.undefined)
         return v.astype('int')
 
@@ -390,8 +389,7 @@ class AssociativeMemory:
             )
         # Runs the validation for the whole batch
         # (Updated to handle 2D inputs)
-        cues = np.where(cues >= self.m, self.m - 1, cues)
-        cues = np.where(cues < 0, 0, cues)
+        cues = np.clip(cues, 0, self.m - 1)
         cues = np.nan_to_num(cues, copy=True, nan=self.undefined).astype(int)
         return cues
 
@@ -431,17 +429,6 @@ class AssociativeMemory:
         counts = np.count_nonzero(self.relation, axis=1)
         counts = np.where(counts == 0, 1, counts)
         self._means = sums / counts
-
-    def _update_iota_relation(self):
-        for i in range(self._n):
-            column = self._relation[i, :]
-            s = np.sum(column)
-            if s == 0:
-                self._iota_relation[i, :] = np.zeros(self._m, dtype=int)
-            else:
-                count = np.count_nonzero(column)
-                mean = self.iota * s / count
-                self._iota_relation[i, :] = np.where(column < mean, 0, column)
 
     def _update_iota_relation(self):
         # Calculates the sum and the count of non-zero entries per column
