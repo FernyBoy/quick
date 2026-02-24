@@ -402,7 +402,98 @@ def calculate_metrics(behaviour, es):
     return precision, recall, accuracy
 
 
+def chunked_batch_recall(eam, cues, batch_size=constants.batch_size):
+    """
+    Processes large data in chunks to avoid memory errors.
+    Returns concatenated memories, masks, and weights.
+    """
+    all_memories = []
+    all_masks = []
+    all_weights = []
+
+    # Iterate through the data in chunks
+    for i in range(0, len(cues), batch_size):
+        chunk = cues[i : i + batch_size]
+
+        # Call the optimized batch_recall from AssociativeMemory
+        mems, masks, weights = eam.batch_recall(chunk)
+        all_memories.append(mems)
+        all_masks.append(masks)
+        all_weights.append(weights)
+
+    all_memories = np.vstack(all_memories)
+    all_masks = np.concatenate(all_masks)
+    all_weights = np.concatenate(all_weights)
+    return all_memories, all_masks, all_weights
+
+
 def recognize_by_memory(eam, tef_rounded, tel, msize, qd, classifier, threshold, es):
+    """Recognizes the test data using the associative memory and updates the confusion matrix.
+
+    It does so processing the data in batches (to avoid memory errors) rather than one by one."""
+    unknown = constants.network_labels
+    confrix = np.zeros(
+        (constants.memory_labels, constants.network_labels + 1), dtype='int'
+    )
+    behaviour = np.zeros(constants.n_behaviours, dtype=np.float64)
+
+    memories, recognized_mask, _ = chunked_batch_recall(eam, tef_rounded)
+    # Increments 'unknown' column for all labels that failed recognition
+    unrecognized_labels = tel[~recognized_mask]
+    if unrecognized_labels.size > 0:
+        counts = np.bincount(unrecognized_labels, minlength=constants.memory_labels)
+        confrix[:, unknown] += counts
+
+    # Handles Recognized Cues
+    if np.any(recognized_mask):
+        rec_memories = memories[recognized_mask]
+        rec_labels = tel[recognized_mask]
+
+        # Batch Dequantize and Predict
+        data = qd.dequantize(rec_memories, msize)
+        # Using a larger batch_size in predict() for GPU efficiency
+        predictions = np.argmax(
+            classifier.predict(data, batch_size=constants.batch_size, verbose=0), axis=1
+        )
+
+        # High-speed confusion matrix update using bincount
+        # Maps (label, pred) pairs to a flat index
+        flat_indices = rec_labels * (unknown + 1) + predictions
+        counts = np.bincount(
+            flat_indices, minlength=constants.memory_labels * (unknown + 1)
+        )
+        confrix += counts.reshape(confrix.shape)
+
+    # Calculates metrics based on the confusion matrix
+    behaviour[constants.no_response_idx] = np.sum(confrix[:threshold, unknown])
+    behaviour[constants.no_mis_response_idx] = np.sum(confrix[threshold:, unknown])
+    behaviour[constants.correct_response_idx] = np.trace(
+        confrix[:threshold, :threshold]
+    )
+    behaviour[constants.correct_mis_response_idx] = np.trace(
+        confrix[
+            threshold : constants.memory_labels, threshold : constants.memory_labels
+        ]
+    )
+    behaviour[constants.incorrect_response_idx] = (
+        np.sum(confrix[:threshold, :unknown])
+        - behaviour[constants.correct_response_idx]
+    )
+    behaviour[constants.incorrect_mis_response_idx] = (
+        np.sum(confrix[threshold:, :unknown])
+        - behaviour[constants.correct_mis_response_idx]
+    )
+    print('Confusion matrix:')
+    constants.print_csv(confrix)
+    print('Behaviour:')
+    constants.print_csv(behaviour)
+
+    return confrix, behaviour
+
+
+def recognize_by_memory_one_by_one(
+    eam, tef_rounded, tel, msize, qd, classifier, threshold, es
+):
     data = []
     labels = []
     unknown = constants.network_labels
@@ -479,8 +570,7 @@ def ams_size_results(
     print(f'Testing features shape = {tf_rounded.shape}')
     print('--------------------------------------------')
     print('Filling the memory...', end='', flush=True)
-    for features in ff_rounded:
-        eam.register(features)
+    eam.batch_register(ff_rounded)
     print('done.')
 
     # Recognize test data.
@@ -645,8 +735,7 @@ def test_filling_percent(
     es,
 ):
     # Registrate filling data.
-    for features in filling_features:
-        eam.register(features)
+    eam.batch_register(filling_features)
     print(f'Filling of memories done at {percent}%')
     _, behaviour = recognize_by_memory(
         eam, testing_features, testing_labels, msize, qd, classifier, threshold, es
@@ -1026,8 +1115,7 @@ def remember(msize, mfill, es):
             es,
         )
         end = round(len(filling_features) * mfill / 100.0)
-        for features in filling_rounded[:end]:
-            eam.register(features)
+        eam.batch_register(filling_rounded[:end])
         print(f'Memory of size {msize} filled with {end} elements for fold {fold}')
 
         for features, prefixes in zip([testing_rounded], prefixes_list):

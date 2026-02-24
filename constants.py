@@ -449,12 +449,16 @@ def print_csv(data):
         writer.writerows(data)
 
 
+def print_debug(*s):
+    print('DEBUG:', *s, file=sys.stderr, flush=True)
+
+
 def print_warning(*s):
-    print('WARNING:', *s, file=sys.stderr)
+    print('WARNING:', *s, file=sys.stderr, flush=True)
 
 
 def print_error(*s):
-    print('ERROR:', *s, file=sys.stderr)
+    print('ERROR:', *s, file=sys.stderr, flush=True)
 
 
 def print_counter(n, every, step=1, symbol='.', prefix=''):

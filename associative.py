@@ -16,9 +16,7 @@
 # File originally create by Raul Peralta-Lozada.
 
 import math
-import random
 import numpy as np
-
 import constants
 
 
@@ -55,12 +53,14 @@ class AssociativeMemory:
             the number of characteristics.
         """
         self._n = n
+        # We need an extra feature to represent the 'undefined' value, so we use m+1 internally.
         self._m = m + 1
         if es is None:
             es = constants.ExperimentSettings()
         self._xi = es.xi
         self._sigma = es.sigma
         self._sigma_scaled = es.sigma * m
+        self._gauss_bank = None  # To be computed on demand for optimization
         self._iota = es.iota
         self._kappa = es.kappa
         self._scale = 1.0 / normpdf(0, 0, self._sigma_scaled)
@@ -164,6 +164,19 @@ class AssociativeMemory:
         self._sigma = s
         self._sigma_scaled = abs(s * self.m)
         self._scale = normpdf(0, 0, self._sigma_scaled)
+        self._gauss_bank = None  # Invalidate precomputed bank
+
+    def _get_gauss_bank(self):
+        """Precomputes Gaussian windows for all possible cue values."""
+        if self._gauss_bank is None:
+            # Bank shape: (m + 1, m). Each row v is the Gaussian window for cue value v.
+            v_indices = np.arange(self.m + 1)
+            j_indices = np.arange(self.m)
+            dist_sq = (j_indices[None, :] - v_indices[:, None]) ** 2
+            self._gauss_bank = np.exp(-dist_sq / (2 * self._sigma_scaled**2))
+            # The last row (v = undefined) results in no modulation (raw relation)
+            self._gauss_bank[self.m, :] = 1.0
+        return self._gauss_bank
 
     @property
     def kappa(self):
@@ -197,35 +210,91 @@ class AssociativeMemory:
         self._xi = x
         self._updated = False
 
-    def register(self, cue) -> None:
-        vector = self.validate(cue)
+    def register(self, value) -> None:
+        vector = self.validate(value)
         r_io = self.to_relation(vector)
         self.abstract(r_io)
 
-    def recognize(self, cue, validate=True):
-        recognized, weights = self.recog_weights(cue, validate)
-        return recognized, np.mean(weights)
+    def batch_register(self, values) -> None:
+        """
+        Registers a batch of values (e.g., an entire dataset) at once.
+        values: A 2D array of shape (number_of_samples, n)
+        """
+        values = np.asanyarray(values)
+        values = self.batch_validate(values)
 
-    def recog_weights(self, cue, validate=True):
+        # Aggregates counts for each feature-value pair
+        # For each column (row, feature), we count how many times each value appears in the batch
+        batch_counts = np.zeros((self._n, self._m), dtype=int)
+        for i in range(self._n):
+            # bincount is extremely fast for this operation
+            batch_counts[i] = np.bincount(values[:, i], minlength=self._m)
+
+        # Adds all counts to the relation and clip at the absolute maximum value
+        # This replaces the iterative np.where calls
+        new_relation = self._relation.astype(float) + batch_counts
+        self._relation = np.clip(new_relation, 0, self.absolute_max_value).astype(int)
+
+        # Flag that means/entropies need recalculation
+        self._updated = False
+
+    def recognize(self, cue, validate=True):
+        recognized, weight = self.recog_weight(cue, validate)
+        return recognized, weight
+
+    def recog_weight(self, cue, validate=True):
         vector = self.validate(cue) if validate else cue
         recognized = self._mismatches(vector) <= self.xi
-        weights = self._weights(vector)
-        recognized = recognized and (self.kappa * self.mean <= np.mean(weights))
-        return recognized, weights
+        weight = np.mean(self._weights(vector))
+        recognized = recognized and (self.kappa * self.mean <= weight)
+        return recognized, weight
 
     def recall(self, cue=None):
         if cue is None:
             cue = np.full(self.n, np.nan)
-        r_io, recognized, weights = self.recall_weights(cue)
-        return r_io, recognized, np.mean(weights)
+        r_io, recognized, weight = self.recall_weights(cue)
+        return r_io, recognized, weight
 
     def recall_weights(self, cue, validate=True):
         vector = self.validate(cue) if validate else cue
-        recognized, _ = self.recog_weights(vector, validate=False)
+        recognized, _ = self.recog_weight(vector, validate=False)
         r_io = self.produce(vector) if recognized else np.full(self.n, self.undefined)
-        weights = self._weights(r_io)
+        weight = np.mean(self._weights(r_io))
         r_io = self.revalidate(r_io)
-        return r_io, recognized, weights
+        return r_io, recognized, weight
+
+    def batch_recall(self, cues):
+        """Vectorized recognition and conditional production."""
+        cues = self.batch_validate(cues)
+        features = np.arange(self.n)[None, :]
+
+        # Recognition: Iota Condition (Containment)
+        # Uses _iota_relation directly to handle 'undefined' indices safely
+        matches = self._iota_relation[features, cues]
+        # A mismatch happens strictly when the cell is 0 AND the cue is defined
+        is_mismatch = (matches == 0) & (cues != self.undefined)
+
+        # Count the mismatches per sample
+        mismatches = np.sum(is_mismatch, axis=1)
+        recognized_mask = mismatches <= self.xi
+
+        # Recognition: Kappa Condition (Average Weight)
+        # Uses _relation directly to handle 'undefined' indices safely
+        weights_per_feature = self._relation[features, cues].astype(float)
+        weights_per_feature = np.where(cues == self.undefined, 0.0, weights_per_feature)
+        weights = np.mean(weights_per_feature, axis=1)
+
+        # Combined Recognition Mask
+        recognized_mask &= weights >= self.kappa * self.mean
+
+        # 3. Production: ONLY for recognized cues
+        memories = np.full(cues.shape, self.undefined, dtype=int)
+        if np.any(recognized_mask):
+            rec_indices = np.where(recognized_mask)[0]
+            # Call production only for recognized samples
+            memories[rec_indices] = self.batch_produce(cues[rec_indices])
+
+        return memories, recognized_mask, weights
 
     def abstract(self, r_io) -> None:
         self._relation = np.where(
@@ -243,26 +312,53 @@ class AssociativeMemory:
     def containment(self, r_io):
         return ~r_io[:, : self.m] | self.iota_relation
 
-    # Reduces the relation in memory to a function, given a cue
     def produce(self, cue):
-        v = np.array([self.choose(i, cue[i]) for i in range(self.n)])
+        j_indices = np.arange(self.m)
+
+        # Identify which features have defined values, and
+        # get float values of the relation for optimization with nump.
+        defined_mask = ~self.is_undefined(cue)
+        weights = self.relation.astype(float)
+
+        if np.any(defined_mask):
+            # Calculate Gaussian windows for all features simultaneously
+            dist_sq = (j_indices[None, :] - cue[:, None]) ** 2
+            gauss = np.exp(-dist_sq / (2 * self._sigma_scaled**2))
+
+            # Modulate only the rows with defined cues
+            weights[defined_mask] *= gauss[defined_mask]
+
+        # Generate random values scaled by the total weight of each row
+        cumsum_weights = weights.cumsum(axis=1)
+        totals = cumsum_weights[:, -1]
+        r = np.random.rand(self.n) * totals
+
+        # Find the first index where cumsum exceeds the random value
+        v = (cumsum_weights < r[:, None]).sum(axis=1)
+
+        # Handle rows with zero total weight (fallback to undefined)
+        v = np.where(totals == 0, self.undefined, v)
         return v
 
-    # Choose a value for feature i.
-    def choose(self, i, v):
-        if self.is_undefined(v):
-            column = self.relation[i, :]
-        else:
-            column = self._normalize(
-                self.relation[i, :], v, self._sigma_scaled, self._scale
-            )
-        s = column.sum()
-        r = s * random.random()
-        for j in range(self.m):
-            if r < column[j]:
-                return j
-            r -= column[j]
-        return self.m - 1
+    def batch_produce(self, cues):
+        """Optimized constructive retrieval using precomputed Gaussian bank."""
+        S, n = cues.shape
+        m = self.m
+
+        # Use precomputed bank indexing: (S, n, m)
+        # This replaces np.exp calculation for every sample
+        gauss = self._get_gauss_bank()[cues]
+
+        # Apply to relation: (n, m) broadcast to (S, n, m)
+        weights = self._relation[None, :, :m] * gauss
+
+        # Sampling logic
+        cumsum_weights = weights.cumsum(axis=2)
+        totals = cumsum_weights[:, :, -1]
+        r = np.random.rand(S, n) * totals
+
+        v = (cumsum_weights < r[:, :, None]).sum(axis=2)
+        return np.where(totals == 0, m, v)
 
     def _normalize(self, column, mean, std, scale):
         norm = np.array([normpdf(i, mean, std, scale) for i in range(self.m)])
@@ -275,19 +371,30 @@ class AssociativeMemory:
 
     def validate(self, cue):
         """It asumes vector is an array of floats, and np.nan
-        may be used to register an undefined value, but it also
-        considerers any negative number or out of range number
-        as undefined.
+        may be used to register an undefined value. Values out of
+        range are clipped to the closest valid value.
         """
-        if len(cue) != self.n:
+        cue = np.asanyarray(cue)
+        if cue.shape[-1] != self.n:
             raise ValueError(
                 'Invalid size of the input data. '
                 + f'Expected {self.n} and given {cue.size}'
             )
-        v = np.where(cue >= self.m, self.m - 1, cue)
-        v = np.where(v < 0, 0, v)
+        v = np.clip(cue, 0, self.m - 1)
         v = np.nan_to_num(v, copy=True, nan=self.undefined)
         return v.astype('int')
+
+    def batch_validate(self, cues):
+        if cues.shape[-1] != self.n:
+            raise ValueError(
+                'Invalid size of the input data. '
+                + f'Expected {self.n} and given {cues.shape[-1]}'
+            )
+        # Runs the validation for the whole batch
+        # (Updated to handle 2D inputs)
+        cues = np.clip(cues, 0, self.m - 1)
+        cues = np.nan_to_num(cues, copy=True, nan=self.undefined).astype(int)
+        return cues
 
     def revalidate(self, vector):
         v = vector.astype('float')
@@ -297,11 +404,12 @@ class AssociativeMemory:
         return np.mean(self._weights(vector))
 
     def _weights(self, vector):
-        weights = []
-        for i in range(self.n):
-            w = 0 if self.is_undefined(vector[i]) else self.relation[i, vector[i]]
-            weights.append(w)
-        return np.array(weights)
+        # Use advanced indexing to pull all weights in one step
+        mask = ~self.is_undefined(vector)
+        weights = np.zeros(self.n)
+        # np.arange(self.n)[mask] ensures we only index valid rows
+        weights[mask] = self.relation[np.arange(self.n)[mask], vector[mask]]
+        return weights
 
     def is_undefined(self, value):
         return value == self.undefined
@@ -326,12 +434,13 @@ class AssociativeMemory:
         self._means = sums / counts
 
     def _update_iota_relation(self):
-        for i in range(self._n):
-            column = self._relation[i, :]
-            s = np.sum(column)
-            if s == 0:
-                self._iota_relation[i, :] = np.zeros(self._m, dtype=int)
-            else:
-                count = np.count_nonzero(column)
-                mean = self.iota * s / count
-                self._iota_relation[i, :] = np.where(column < mean, 0, column)
+        # Calculates the sum and the count of non-zero entries per column
+        sums = self._relation.sum(axis=1, keepdims=True)
+        counts = np.count_nonzero(self._relation, axis=1).reshape(-1, 1)
+
+        # Avoid division by zero for empty rows
+        counts = np.where(counts == 0, 1, counts)
+        thresholds = self.iota * sums / counts
+
+        # Apply thresholding to the entire table at once
+        self._iota_relation = np.where(self._relation < thresholds, 0, self._relation)
