@@ -14,8 +14,11 @@ networks_and_features() {
     fi
 }
 
-# networks_and_features
+# Starts the timing
+SECONDS=0
+echo "Starting at `date`"
 
+# networks_and_features
 for num_classes in 2 4 8 16 24 32 48 64; do
     python eam.py -e 1 --num-classes="$num_classes" --runpath="$runpath" && \
     python eam.py -e 2 --num-classes="$num_classes" --runpath="$runpath" && \
@@ -26,3 +29,4 @@ for num_classes in 2 4 8 16 24 32 48 64; do
 	exit 1
     fi
 done
+echo "Total time spent, in seconds: $SECONDS"
