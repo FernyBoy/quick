@@ -232,7 +232,7 @@ class AssociativeMemory:
 
         # Adds all counts to the relation and clip at the absolute maximum value
         # This replaces the iterative np.where calls
-        new_relation = self._relation.astype(float) + batch_counts
+        new_relation = self._relation + batch_counts
         self._relation = np.clip(new_relation, 0, self.absolute_max_value).astype(int)
 
         # Flag that means/entropies need recalculation
@@ -266,35 +266,40 @@ class AssociativeMemory:
     def batch_recall(self, cues):
         """Vectorized recognition and conditional production."""
         cues = self.batch_validate(cues)
+
+        if not self._updated:
+            self._updated = self.update()  # Ensure iota_relation and mean are current
         features = np.arange(self.n)[None, :]
 
-        # Recognition: Iota Condition (Containment)
-        # Uses _iota_relation directly to handle 'undefined' indices safely
+        # 2. Recognition Logic (using the input Cue)
+        # Iota Condition: Check containment in thresholded relation
         matches = self._iota_relation[features, cues]
-        # A mismatch happens strictly when the cell is 0 AND the cue is defined
         is_mismatch = (matches == 0) & (cues != self.undefined)
-
-        # Count the mismatches per sample
         mismatches = np.sum(is_mismatch, axis=1)
         recognized_mask = mismatches <= self.xi
 
-        # Recognition: Kappa Condition (Average Weight)
-        # Uses _relation directly to handle 'undefined' indices safely
-        weights_per_feature = self._relation[features, cues].astype(float)
-        weights_per_feature = np.where(cues == self.undefined, 0.0, weights_per_feature)
-        weights = np.mean(weights_per_feature, axis=1)
-
-        # Combined Recognition Mask
-        recognized_mask &= weights >= self.kappa * self.mean
+        # Kappa Condition: Check average weight of the cue
+        cue_weights_per_feature = self._relation[features, cues].astype(float)
+        cue_weights_per_feature = np.where(
+            cues == self.undefined, 0.0, cue_weights_per_feature
+        )
+        cue_weights = np.mean(cue_weights_per_feature, axis=1)
+        recognized_mask &= cue_weights >= (self.kappa * self.mean)
 
         # 3. Production: ONLY for recognized cues
         memories = np.full(cues.shape, self.undefined, dtype=int)
         if np.any(recognized_mask):
             rec_indices = np.where(recognized_mask)[0]
-            # Call production only for recognized samples
             memories[rec_indices] = self.batch_produce(cues[rec_indices])
 
-        return memories, recognized_mask, weights
+        # 4. Weight Calculation: Based on RECOVERED memories (consistency with recall())
+        # Note: Samples that were not recognized will have a weight of 0.0
+        mem_weights_per_feature = self._relation[features, memories].astype(float)
+        mem_weights_per_feature = np.where(
+            memories == self.undefined, 0.0, mem_weights_per_feature
+        )
+        final_weights = np.mean(mem_weights_per_feature, axis=1)
+        return memories, recognized_mask, final_weights
 
     def abstract(self, r_io) -> None:
         self._relation = np.where(
