@@ -83,13 +83,14 @@ def _get_segment(
     categorical=False,
     predict_only=False,
 ):
-    hdf5_path = os.path.join(constants.data_path, constants.prep_hdf5_fname)
+    hdf5_fname = os.path.join(constants.data_path, constants.prep_hdf5_fname)
 
     # Run the one-time loading/balancing logic if HDF5 doesn't exist
-    if not os.path.exists(hdf5_path):
-        total_size = _load_dataset(constants.data_path)
+    if not os.path.exists(hdf5_fname):
+        dataset_path = os.path.join(constants.data_path, constants.dataset_name)
+        total_size = _load_dataset(dataset_path, hdf5_fname)
     else:
-        with h5py.File(hdf5_path, 'r') as f:
+        with h5py.File(hdf5_fname, 'r') as f:
             total_size = f['labels'].shape[0]
 
     training_size = int(total_size * constants.nn_training_percent)
@@ -120,7 +121,7 @@ def _get_segment(
     else:
         segments = [(p, total_size), (0, q)]
     return QuickDrawGenerator(
-        hdf5_path,
+        hdf5_fname,
         segments,
         categorical=categorical,
         batch_size=constants.batch_size,
@@ -128,13 +129,13 @@ def _get_segment(
     )
 
 
-def _load_dataset(path):
+def _load_dataset(path, hdf5_fname):
     """Coordinates the creation of the balanced HDF5 dataset in two passes to minimize RAM usage."""
     # Scan files to find the minimum images per class without loading data
     class_info, minimum_images = _scan_dataset_metadata(path)
 
     # Pass 2: Create the HDF5 and fill it class-by-class
-    _save_dataset_streamed(class_info, minimum_images, path)
+    _save_dataset_streamed(class_info, minimum_images, path, hdf5_fname)
 
     total_size = len(class_info) * minimum_images
     return total_size
@@ -179,10 +180,9 @@ def _scan_dataset_metadata(path):
     return class_info, minimum_images
 
 
-def _save_dataset_streamed(class_info, min_imgs, path):
+def _save_dataset_streamed(class_info, min_imgs, hdf5_fname):
     """Writes to HDF5 one class at a time using a pre-shuffled index map."""
     total_size = len(class_info) * min_imgs
-    hdf5_fname = os.path.join(path, constants.prep_hdf5_fname)
 
     # Generate a global shuffled map of indices (only 50-100MB of RAM for 10M images)
     print('Generating global shuffle map...')

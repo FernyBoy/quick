@@ -21,7 +21,8 @@ import re
 import sys
 import numpy as np
 
-data_path = 'data/quick'
+data_path = 'data'
+dataset_name = 'quickdraw'
 run_prefix = 'runs'
 run_path = run_prefix
 n_labels_path = None
