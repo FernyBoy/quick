@@ -161,8 +161,8 @@ def train_network(prefix):
         print('Getting the dataset ready...')
         training_gen = dataset.get_training(fold, categorical=True)
         # No shuffling is needed for validation nor testing.
-        validating_gen = dataset.get_validating(fold, categorical=True, shuffle=False)
-        testing_gen = dataset.get_testing(fold, categorical=True, shuffle=False)
+        validating_gen = dataset.get_validating(fold, categorical=True)
+        testing_gen = dataset.get_testing(fold, categorical=True)
         predict_gen = dataset.get_testing(fold, predict_only=True)
 
         rmse = tf.keras.metrics.RootMeanSquaredError()

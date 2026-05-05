@@ -33,14 +33,12 @@ _TESTING_SEGMENT = 3
 def get_training(
     fold,
     categorical=False,
-    shuffle=True,
     predict_only=False,
 ):
     return _get_segment(
         _TRAINING_SEGMENT,
         fold,
         categorical,
-        shuffle=shuffle,
         predict_only=predict_only,
     )
 
@@ -48,23 +46,20 @@ def get_training(
 def get_validating(
     fold,
     categorical=False,
-    shuffle=True,
     predict_only=False,
 ):
     return _get_segment(
         _VALIDATING_SEGMENT,
         fold,
         categorical,
-        shuffle=shuffle,
         predict_only=predict_only,
     )
 
 
-def get_filling(fold, shuffle=True, predict_only=False):
+def get_filling(fold, predict_only=False):
     return _get_segment(
         _FILLING_SEGMENT,
         fold,
-        shuffle=shuffle,
         predict_only=predict_only,
     )
 
@@ -72,14 +67,12 @@ def get_filling(fold, shuffle=True, predict_only=False):
 def get_testing(
     fold,
     categorical=False,
-    shuffle=True,
     predict_only=False,
 ):
     return _get_segment(
         _TESTING_SEGMENT,
         fold,
         categorical=categorical,
-        shuffle=shuffle,
         predict_only=predict_only,
     )
 
@@ -88,7 +81,6 @@ def _get_segment(
     segment,
     fold,
     categorical=False,
-    shuffle=True,
     predict_only=False,
 ):
     hdf5_path = os.path.join(constants.data_path, constants.prep_hdf5_fname)
@@ -132,7 +124,6 @@ def _get_segment(
         segments,
         categorical=categorical,
         batch_size=constants.batch_size,
-        shuffle=shuffle,
         predict_only=predict_only,
     )
 
@@ -235,7 +226,6 @@ class QuickDrawGenerator(Sequence):
         segments,
         categorical=False,
         batch_size=2048,
-        shuffle=True,
         predict_only=False,
         **kwargs,
     ):
@@ -244,7 +234,6 @@ class QuickDrawGenerator(Sequence):
         self.segments = segments
         self.categorical = categorical
         self.batch_size = batch_size
-        self.shuffle = shuffle and not predict_only
         self.predict_only = predict_only
         self.total_samples = sum(end - start for start, end in self.segments)
         self.data_file = None
@@ -272,8 +261,6 @@ class QuickDrawGenerator(Sequence):
 
         if self.predict_only:
             return data  # Just return the images for prediction
-        if self.shuffle:
-            data, labels = _shuffle_dataset(data, labels)
         # Categorical Conversion (Issue #1)
         if self.categorical:
             # Converts integer labels to one-hot vectors
