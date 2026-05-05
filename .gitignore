@@ -4,7 +4,7 @@ tmp/
 runs_*/
 runs/*
 .vscode/
-quick
+data/
 nohup.out
 
 # Created by https://www.toptal.com/developers/gitignore/api/windows,macos,linux,python
