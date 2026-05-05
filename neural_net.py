@@ -259,8 +259,7 @@ def obtain_features(model_prefix, features_prefix, labels_prefix):
         model = tf.keras.models.load_model(filename)
 
         # 1. Get Generators (which replace the raw data arrays)
-        # We set predict_only=True so the generator returns ONLY images for model.predict
-        # and it does not shuffle them.
+        # We set predict_only=True so the generator returns ONLY images for model.predict.
         fill_gen = dataset.get_filling(fold, predict_only=True)
         test_gen = dataset.get_testing(fold, predict_only=True)
         settings = [

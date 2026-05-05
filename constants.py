@@ -114,8 +114,8 @@ am_testing_percent = nn_testing_percent
 # the memory system. The first one must be a power of two (8 at least) while
 # the second must be a pair number, because in the negation experiment only
 # half of the classes are stored in the memory.
-network_labels = 64
-memory_labels = 64
+network_labels = 256
+memory_labels = 256
 all_memory_labels = range(memory_labels)
 
 

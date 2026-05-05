@@ -129,86 +129,100 @@ def _get_segment(
 
 
 def _load_dataset(path):
-    data, labels = _load_quickdraw(path)
-    _save_dataset_as_hdf5(data, labels, path)
-    total_size = data.shape[0]
+    """Coordinates the creation of the balanced HDF5 dataset in two passes to minimize RAM usage."""
+    # Scan files to find the minimum images per class without loading data
+    class_info, minimum_images = _scan_dataset_metadata(path)
+
+    # Pass 2: Create the HDF5 and fill it class-by-class
+    _save_dataset_streamed(class_info, minimum_images, path)
+
+    total_size = len(class_info) * minimum_images
     return total_size
 
 
-def _save_dataset_as_hdf5(data, labels, path):
-    """Saves the balanced, shuffled data into a permanent HDF5 container."""
-    data, labels = _shuffle_dataset(data, labels)
-    hdf5_fname = os.path.join(path, constants.prep_hdf5_fname)
-    print(f'Creating HDF5 dataset at {hdf5_fname}...')
-
-    with h5py.File(hdf5_fname, 'w') as f:
-        # We store as uint8 (0-255) to save disk space (7M images = ~5.5GB)
-        # If we stored as float32, it would be ~22GB!
-        f.create_dataset(
-            'images',
-            data=data.astype('uint8'),
-            chunks=(constants.batch_size, 28, 28),  # Store data in batch-sized blocks
-            compression='gzip',
-        )
-        f.create_dataset('labels', data=labels.astype('int32'))
-    print('HDF5 creation complete.')
-
-
-def _load_quickdraw(path):
-    """
-    Loads all .npy QuickDraw files in a directory and assigns numeric labels.
-    Returns:
-        data: ndarray of shape (N, 28, 28)
-        labels: ndarray of integers of shape (N,)
-    It saves the label mapping in CSV file.
-    """
-    print('Loading QuickDraw .npy files...')
+def _scan_dataset_metadata(path):
+    """Determines the minimum images per class using memory-mapping."""
+    print('Scanning QuickDraw metadata...')
     files = [f for f in os.listdir(path) if f.endswith('.npy')]
-    random.shuffle(files)
     if len(files) < constants.network_labels:
-        constants.print_error(
-            f'Only {len(files)} classes found instead of at least {constants.network_labels}.'
+        raise ValueError(
+            f'Not enough classes found in {path}. '
+            f'Expected at least {constants.network_labels}, found {len(files)}.'
         )
-        exit(1)
-    # Only data that is going to be used is included in the dataset.
+    random.shuffle(files)
     files = files[: constants.network_labels]
-    data_list = []
-    labels_list = []
-    label_names = []
-    minimum_images = -1
-    temp_data_list = []
-    temp_labels_list = []
 
-    for label_index, filename in enumerate(files):
+    class_info = []
+    minimum_images = -1
+    label_names = []
+
+    for filename in files:
         full_path = os.path.join(path, filename)
         name = filename.replace('full_numpy_bitmap_', '').replace('.npy', '')
+
+        # mmap_mode='r' allows us to see the shape without loading into RAM
+        images = np.load(full_path, mmap_mode='r')
+        count = images.shape[0]
+
+        if minimum_images == -1 or count < minimum_images:
+            minimum_images = count
+
+        class_info.append({'name': name, 'path': full_path})
         label_names.append(name)
 
-        print(f'Loading {name} from {full_path}...')
-        images = np.load(full_path)
-        if minimum_images == -1:
-            minimum_images = images.shape[0]
-        elif images.shape[0] < minimum_images:
-            minimum_images = images.shape[0]
-        images = images.astype(float).reshape(-1, 28, 28)
-
-        temp_data_list.append(images)
-        temp_labels_list.append(np.full(len(images), label_index, dtype=int))
-
+    # Save the label mapping to a CSV for later reference.
     csv_path = os.path.join(constants.data_path, constants.prep_names_fname)
     with open(csv_path, 'w') as file:
         file.write('\n'.join(label_names))
 
-    print(f'Balancing the dataset to {minimum_images} per class')
-    for data, labels in zip(temp_data_list, temp_labels_list):
-        data_list.append(data[:minimum_images])
-        labels_list.append(labels[:minimum_images])
+    print(f'Balancing dataset to {minimum_images} images per class.')
+    return class_info, minimum_images
 
-    data = np.concatenate(data_list, axis=0)
-    labels = np.concatenate(labels_list, axis=0)
 
-    print(f'Loaded a total of {data.shape[0]} images of {len(label_names)} classes.')
-    return data, labels
+def _save_dataset_streamed(class_info, min_imgs, path):
+    """Writes to HDF5 one class at a time using a pre-shuffled index map."""
+    total_size = len(class_info) * min_imgs
+    hdf5_fname = os.path.join(path, constants.prep_hdf5_fname)
+
+    # Generate a global shuffled map of indices (only 50-100MB of RAM for 10M images)
+    print('Generating global shuffle map...')
+    shuffled_indices = np.arange(total_size)
+    np.random.shuffle(shuffled_indices)
+
+    print(f'Creating Streamed HDF5 at {hdf5_fname}...')
+    with h5py.File(hdf5_fname, 'w') as f:
+        # Pre-allocate the full dataset space
+        ds_images = f.create_dataset(
+            'images',
+            shape=(total_size, 28, 28),
+            dtype='uint8',
+            chunks=(constants.batch_size, 28, 28),
+            compression='gzip',
+        )
+        ds_labels = f.create_dataset('labels', shape=(total_size,), dtype='int32')
+
+        for i, info in enumerate(class_info):
+            print(f'Streaming class {i}: {info["name"]}...')
+
+            # Load only ONE class at a time
+            imgs = np.load(info['path'])[:min_imgs].reshape(-1, 28, 28).astype('uint8')
+            lbls = np.full(min_imgs, i, dtype='int32')
+
+            # Identify the target "shuffled" slots for this class
+            target_slots = shuffled_indices[i * min_imgs : (i + 1) * min_imgs]
+
+            # CRITICAL: h5py performs best when writing to SORTED indices.
+            # We sort our slots and images to ensure the disk write is sequential-ish.
+            sort_map = np.argsort(target_slots)
+            sorted_slots = target_slots[sort_map]
+
+            ds_images[sorted_slots] = imgs[sort_map]
+            ds_labels[sorted_slots] = lbls[sort_map]
+
+            # Explicitly clear from RAM
+            del imgs, lbls
+
+    print('Streamed HDF5 creation complete.')
 
 
 def _shuffle_dataset(data, labels):
