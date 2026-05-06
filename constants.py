@@ -29,6 +29,7 @@ n_labels_path = None
 idx_digits = 3
 prep_hdf5_fname = 'prep_dataset.h5'
 prep_names_fname = 'prep_names.csv'
+prep_shuffled_map = 'prep_shuffled_map.npy'
 
 image_path = 'images'
 testing_path = 'test'

@@ -135,7 +135,7 @@ def _load_dataset(path, hdf5_fname):
     class_info, minimum_images = _scan_dataset_metadata(path)
 
     # Pass 2: Create the HDF5 and fill it class-by-class
-    _save_dataset_streamed(class_info, minimum_images, path, hdf5_fname)
+    _save_dataset_streamed(class_info, minimum_images, hdf5_fname)
 
     total_size = len(class_info) * minimum_images
     return total_size
@@ -180,18 +180,14 @@ def _scan_dataset_metadata(path):
     return class_info, minimum_images
 
 
-def _save_dataset_streamed(class_info, min_imgs, hdf5_fname):
-    """Writes to HDF5 one class at a time using a pre-shuffled index map."""
+def _save_dataset_streamed(class_info, min_imgs, path):
+    """Writes sequentially to HDF5. Shuffling is handled by the Generator."""
     total_size = len(class_info) * min_imgs
+    hdf5_fname = os.path.join(path, constants.prep_hdf5_fname)
 
-    # Generate a global shuffled map of indices (only 50-100MB of RAM for 10M images)
-    print('Generating global shuffle map...')
-    shuffled_indices = np.arange(total_size)
-    np.random.shuffle(shuffled_indices)
-
-    print(f'Creating Streamed HDF5 at {hdf5_fname}...')
+    print(f'Creating Sequential HDF5 at {hdf5_fname}...')
     with h5py.File(hdf5_fname, 'w') as f:
-        # Pre-allocate the full dataset space
+        # Keep compression if you want, sequential writes handle it much better
         ds_images = f.create_dataset(
             'images',
             shape=(total_size, 28, 28),
@@ -203,34 +199,21 @@ def _save_dataset_streamed(class_info, min_imgs, hdf5_fname):
 
         for i, info in enumerate(class_info):
             print(f'Streaming class {i}: {info["name"]}...')
-
-            # Load only ONE class at a time
             imgs = np.load(info['path'])[:min_imgs].reshape(-1, 28, 28).astype('uint8')
             lbls = np.full(min_imgs, i, dtype='int32')
 
-            # Identify the target "shuffled" slots for this class
-            target_slots = shuffled_indices[i * min_imgs : (i + 1) * min_imgs]
+            # WRITE SEQUENTIALLY: No random seeking
+            start_idx = i * min_imgs
+            end_idx = start_idx + min_imgs
+            ds_images[start_idx:end_idx] = imgs
+            ds_labels[start_idx:end_idx] = lbls
 
-            # CRITICAL: h5py performs best when writing to SORTED indices.
-            # We sort our slots and images to ensure the disk write is sequential-ish.
-            sort_map = np.argsort(target_slots)
-            sorted_slots = target_slots[sort_map]
-
-            ds_images[sorted_slots] = imgs[sort_map]
-            ds_labels[sorted_slots] = lbls[sort_map]
-
-            # Explicitly clear from RAM
-            del imgs, lbls
-
-    print('Streamed HDF5 creation complete.')
-
-
-def _shuffle_dataset(data, labels):
-    indices = np.arange(data.shape[0])
+    # Save a global shuffle map once the file is done
+    print('Generating and saving global shuffle map...')
+    indices = np.arange(total_size)
     np.random.shuffle(indices)
-    data = data[indices]
-    labels = labels[indices]
-    return data, labels
+    np.save(os.path.join(path, constants.prep_shuffled_map), indices)
+    print('Streamed HDF5 creation complete.')
 
 
 class QuickDrawGenerator(Sequence):
@@ -246,90 +229,95 @@ class QuickDrawGenerator(Sequence):
         super().__init__(**kwargs)
         self.hdf5_path = hdf5_path
         self.segments = segments
-        self.categorical = categorical
         self.batch_size = batch_size
         self.predict_only = predict_only
-        self.total_samples = sum(end - start for start, end in self.segments)
+        self.categorical = categorical
+
+        # Load the global map we created during HDF5 creation
+        map_path = os.path.join(os.path.dirname(hdf5_path), constants.prep_shuffled_map)
+        self.global_map = np.load(map_path)
+
+        # Filter the map to only include indices within our fold's segments
+        fold_indices = []
+        for start, end in self.segments:
+            fold_indices.extend(range(start, end))
+        self.my_indices = self.global_map[
+            fold_indices
+        ]  # The 'shuffled' truth for this fold
+
+        self.total_samples = len(self.my_indices)
         self.data_file = None
-        self.on_epoch_end()
-
-    def __len__(self):
-        return int(np.ceil(self.total_samples / self.batch_size))
-
-    def on_epoch_end(self):
-        pass
 
     def __getitem__(self, idx):
-        # Lazy initialization
         if self.data_file is None:
-            nbytes = (constants.batch_size // 2) ** 2 * (constants.batch_size // 4)
-            self.data_file = h5py.File(
-                self.hdf5_path, 'r', rdcc_nbytes=nbytes
-            )  # 512MB Cache
-        # Extract the specific indices for this batch
+            self.data_file = h5py.File(self.hdf5_path, 'r')
+
         start = idx * self.batch_size
-        # Retrieves what remains if it is not a full batch
-        count = min(self.batch_size, self.total_samples - start)
-        data, labels = self._get_data_from_h5(start, count)
+        end = min(start + self.batch_size, self.total_samples)
+
+        # Get the specific 'shuffled' indices for this batch
+        batch_indices = self.my_indices[start:end]
+
+        # Fancy indexing on read is faster than on write
+        # We sort them to help HDF5 read speed
+        sort_idx = np.argsort(batch_indices)
+        rev_sort_idx = np.argsort(sort_idx)
+
+        data = self.data_file['images'][batch_indices[sort_idx]][rev_sort_idx]
         data = data.astype('float32') / 255.0
 
         if self.predict_only:
-            return data  # Just return the images for prediction
-        # Categorical Conversion (Issue #1)
+            return data
+
+        labels = self.data_file['labels'][batch_indices[sort_idx]][rev_sort_idx]
         if self.categorical:
-            # Converts integer labels to one-hot vectors
             labels = keras.utils.to_categorical(
                 labels, num_classes=constants.network_labels
             )
+
         return data, {'classifier': labels, 'decoder': data}
 
     def _get_data_from_h5(self, start, count):
-        """Helper to fetch a slice by jumping through the ranges."""
-        remaining = count
-        current = start
-        results_data = []
-        results_labels = []
+        """Fetches shuffled samples using the virtual index map."""
+        if self.data_file is None:
+            # swmr=True (Single Writer Multiple Reader) is faster for reading
+            self.data_file = h5py.File(self.hdf5_path, 'r', swmr=True)
 
-        for s_start, s_end in self.segments:
-            range_len = s_end - s_start
+        # 1. Get the physical row numbers from our pre-shuffled map
+        end = start + count
+        batch_physical_indices = self.my_indices[start:end]
 
-            if current < range_len:
-                # How much can we take from this specific range?
-                take = min(remaining, range_len - current)
+        # 2. Optimization: HDF5 reads are 10x faster if indices are sorted
+        sort_idx = np.argsort(batch_physical_indices)
+        rev_sort_idx = np.argsort(sort_idx)
+        sorted_indices = batch_physical_indices[sort_idx]
 
-                # Physical slice in the H5 file
-                h5_start = s_start + current
-                h5_end = h5_start + take
+        # 3. Pull from disk
+        data = self.data_file['images'][sorted_indices]
+        # Put them back into the shuffled order the model expects
+        data = data[rev_sort_idx]
 
-                results_data.append(self.data_file['images'][h5_start:h5_end])
-                if not self.predict_only:
-                    results_labels.append(self.data_file['labels'][h5_start:h5_end])
+        labels = None
+        if not self.predict_only:
+            labels = self.data_file['labels'][sorted_indices]
+            labels = labels[rev_sort_idx]
 
-                remaining -= take
-                current = 0  # Next range starts from its beginning
-            else:
-                # Skips this range entirely
-                current -= range_len
-
-            if remaining <= 0:
-                break
-
-        # Combine the chunks (only happens at the 'gap' boundary)
-        data = np.concatenate(results_data, axis=0)
-        labels = (
-            np.concatenate(results_labels, axis=0) if not self.predict_only else None
-        )
         return data, labels
 
     def get_all_labels(self):
-        """Efficiently retrieves all labels without loading a single image."""
+        """Retrieves all labels for this fold in their shuffled order."""
         if self.data_file is None:
             self.data_file = h5py.File(self.hdf5_path, 'r', swmr=True)
-        label_chunks = []
-        for start, end in self.segments:
-            # We slice ONLY the labels dataset
-            label_chunks.append(self.data_file['labels'][start:end])
-        all_labels = np.concatenate(label_chunks, axis=0)
+
+        # We use the map to get physical locations, sort for speed, then unsort
+        all_phys_indices = self.my_indices
+        sort_idx = np.argsort(all_phys_indices)
+        rev_sort_idx = np.argsort(sort_idx)
+
+        # Pull only the labels column (very memory efficient)
+        all_labels = self.data_file['labels'][all_phys_indices[sort_idx]]
+        all_labels = all_labels[rev_sort_idx]
+
         if self.categorical:
             return keras.utils.to_categorical(
                 all_labels, num_classes=constants.network_labels
