@@ -232,94 +232,80 @@ class QuickDrawGenerator(Sequence):
         self.predict_only = predict_only
         self.categorical = categorical
 
-        # Load the global map we created during HDF5 creation
+        # 1. Load the shuffle map created during HDF5 creation
         map_path = os.path.join(os.path.dirname(hdf5_path), constants.prep_shuffled_map)
         self.global_map = np.load(map_path)
 
-        # Filter the map to only include indices within our fold's segments
+        # 2. Filter the map to only include the specific physical indices for this fold
         fold_indices = []
         for start, end in self.segments:
             fold_indices.extend(range(start, end))
-        self.my_indices = self.global_map[
-            fold_indices
-        ]  # The 'shuffled' truth for this fold
+        self.my_indices = self.global_map[fold_indices]
 
         self.total_samples = len(self.my_indices)
         self.data_file = None
 
+    # REQUIRED BY KERAS 3
+    @property
+    def num_batches(self):
+        return self.__len__()
+
+    def __len__(self):
+        return int(np.ceil(self.total_samples / self.batch_size))
+
     def __getitem__(self, idx):
-        if self.data_file is None:
-            self.data_file = h5py.File(self.hdf5_path, 'r')
-
+        """Standard Keras entry point for fetching a batch."""
         start = idx * self.batch_size
-        end = min(start + self.batch_size, self.total_samples)
+        count = min(self.batch_size, self.total_samples - start)
 
-        # Get the specific 'shuffled' indices for this batch
-        batch_indices = self.my_indices[start:end]
+        # Use our helper to do the heavy lifting
+        return self._get_data_from_h5(start, count)
 
-        # Fancy indexing on read is faster than on write
-        # We sort them to help HDF5 read speed
-        sort_idx = np.argsort(batch_indices)
+    def _get_data_from_h5(self, start, count):
+        """Fetches shuffled samples using the virtual index map with optimized HDF5 reads."""
+        if self.data_file is None:
+            # Open with SWMR for better read performance
+            self.data_file = h5py.File(self.hdf5_path, 'r', swmr=True)
+
+        # 1. Get the physical row numbers for this batch from our map
+        end = start + count
+        batch_phys = self.my_indices[start:end]
+
+        # 2. Optimization: Sort indices to prevent disk 'thrashing' (faster reads)
+        sort_idx = np.argsort(batch_phys)
         rev_sort_idx = np.argsort(sort_idx)
+        sorted_phys = batch_phys[sort_idx]
 
-        data = self.data_file['images'][batch_indices[sort_idx]][rev_sort_idx]
+        # 3. Pull from disk and normalize
+        data = self.data_file['images'][sorted_phys][rev_sort_idx]
         data = data.astype('float32') / 255.0
 
         if self.predict_only:
             return data
 
-        labels = self.data_file['labels'][batch_indices[sort_idx]][rev_sort_idx]
+        # 4. Pull labels and handle categorical conversion
+        labels = self.data_file['labels'][sorted_phys][rev_sort_idx]
         if self.categorical:
             labels = keras.utils.to_categorical(
                 labels, num_classes=constants.network_labels
             )
 
+        # Match your specific model output structure
         return data, {'classifier': labels, 'decoder': data}
 
-    def _get_data_from_h5(self, start, count):
-        """Fetches shuffled samples using the virtual index map."""
-        if self.data_file is None:
-            # swmr=True (Single Writer Multiple Reader) is faster for reading
-            self.data_file = h5py.File(self.hdf5_path, 'r', swmr=True)
-
-        # 1. Get the physical row numbers from our pre-shuffled map
-        end = start + count
-        batch_physical_indices = self.my_indices[start:end]
-
-        # 2. Optimization: HDF5 reads are 10x faster if indices are sorted
-        sort_idx = np.argsort(batch_physical_indices)
-        rev_sort_idx = np.argsort(sort_idx)
-        sorted_indices = batch_physical_indices[sort_idx]
-
-        # 3. Pull from disk
-        data = self.data_file['images'][sorted_indices]
-        # Put them back into the shuffled order the model expects
-        data = data[rev_sort_idx]
-
-        labels = None
-        if not self.predict_only:
-            labels = self.data_file['labels'][sorted_indices]
-            labels = labels[rev_sort_idx]
-
-        return data, labels
-
     def get_all_labels(self):
-        """Retrieves all labels for this fold in their shuffled order."""
+        """Used for Confusion Matrices; retrieves labels in the correct shuffled order."""
         if self.data_file is None:
             self.data_file = h5py.File(self.hdf5_path, 'r', swmr=True)
 
-        # We use the map to get physical locations, sort for speed, then unsort
-        all_phys_indices = self.my_indices
-        sort_idx = np.argsort(all_phys_indices)
+        all_phys = self.my_indices
+        sort_idx = np.argsort(all_phys)
         rev_sort_idx = np.argsort(sort_idx)
 
-        # Pull only the labels column (very memory efficient)
-        all_labels = self.data_file['labels'][all_phys_indices[sort_idx]]
-        all_labels = all_labels[rev_sort_idx]
+        all_labels = self.data_file['labels'][all_phys[sort_idx]][rev_sort_idx]
 
         if self.categorical:
             return keras.utils.to_categorical(
                 all_labels, num_classes=constants.network_labels
             )
-
         return all_labels
