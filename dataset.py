@@ -180,18 +180,17 @@ def _scan_dataset_metadata(path):
     return class_info, minimum_images
 
 
-def _save_dataset_streamed(class_info, min_imgs, hdf5_fname):
-    """Writes to HDF5 one class at a time using a pre-shuffled index map."""
+def _save_dataset_streamed(class_info, min_imgs, hdf5_full_name):
+    """Semi-randomizes the dataset by processing chunks from all classes in parallel."""
     total_size = len(class_info) * min_imgs
+    # Adjust buffer_per_class based on your available RAM
+    buffer_per_class = 10000
 
-    # Generate a global shuffled map of indices (only 50-100MB of RAM for 10M images)
-    print('Generating global shuffle map...')
-    shuffled_indices = np.arange(total_size)
-    np.random.shuffle(shuffled_indices)
+    # Pre-map all files to avoid overhead in the loop
+    mmaps = [np.load(info['path'], mmap_mode='r') for info in class_info]
 
-    print(f'Creating Streamed HDF5 at {hdf5_fname}...')
-    with h5py.File(hdf5_fname, 'w') as f:
-        # Pre-allocate the full dataset space
+    print(f'Creating Semi-Shuffled HDF5 at {hdf5_full_name}...')
+    with h5py.File(hdf5_full_name, 'w') as f:
         ds_images = f.create_dataset(
             'images',
             shape=(total_size, 28, 28),
@@ -201,28 +200,35 @@ def _save_dataset_streamed(class_info, min_imgs, hdf5_fname):
         )
         ds_labels = f.create_dataset('labels', shape=(total_size,), dtype='int32')
 
-        for i, info in enumerate(class_info):
-            print(f'Streaming class {i}: {info["name"]}...')
+        write_ptr = 0
+        for start in range(0, min_imgs, buffer_per_class):
+            end = min(start + buffer_per_class, min_imgs)
+            actual_chunk_size = end - start
 
-            # Load only ONE class at a time
-            imgs = np.load(info['path'])[:min_imgs].reshape(-1, 28, 28).astype('uint8')
-            lbls = np.full(min_imgs, i, dtype='int32')
+            chunk_images = []
+            chunk_labels = []
 
-            # Identify the target "shuffled" slots for this class
-            target_slots = shuffled_indices[i * min_imgs : (i + 1) * min_imgs]
+            for i, m in enumerate(mmaps):
+                # Extract slice from memory-mapped file
+                imgs = m[start:end].reshape(-1, 28, 28).astype('uint8')
+                chunk_images.append(imgs)
+                chunk_labels.append(np.full(actual_chunk_size, i, dtype='int32'))
 
-            # CRITICAL: h5py performs best when writing to SORTED indices.
-            # We sort our slots and images to ensure the disk write is sequential-ish.
-            sort_map = np.argsort(target_slots)
-            sorted_slots = target_slots[sort_map]
+            # Combine and shuffle this specific 'super-chunk' in RAM
+            combined_imgs = np.concatenate(chunk_images, axis=0)
+            combined_lbls = np.concatenate(chunk_labels, axis=0)
 
-            ds_images[sorted_slots] = imgs[sort_map]
-            ds_labels[sorted_slots] = lbls[sort_map]
+            shuffler = np.random.permutation(len(combined_lbls))
 
-            # Explicitly clear from RAM
-            del imgs, lbls
+            # Write sequentially
+            n_to_write = len(shuffler)
+            ds_images[write_ptr : write_ptr + n_to_write] = combined_imgs[shuffler]
+            ds_labels[write_ptr : write_ptr + n_to_write] = combined_lbls[shuffler]
 
-    print('Streamed HDF5 creation complete.')
+            write_ptr += n_to_write
+            print(f'Processed {write_ptr}/{total_size} images...')
+
+    print('HDF5 creation complete.')
 
 
 def _shuffle_dataset(data, labels):
@@ -252,6 +258,10 @@ class QuickDrawGenerator(Sequence):
         self.total_samples = sum(end - start for start, end in self.segments)
         self.data_file = None
         self.on_epoch_end()
+
+    @property
+    def num_batches(self):
+        return self.__len__()
 
     def __len__(self):
         return int(np.ceil(self.total_samples / self.batch_size))
