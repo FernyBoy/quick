@@ -135,7 +135,7 @@ def _load_dataset(path, hdf5_fname):
     class_info, minimum_images = _scan_dataset_metadata(path)
 
     # Pass 2: Create the HDF5 and fill it class-by-class
-    _save_dataset_streamed(class_info, minimum_images, path, hdf5_fname)
+    _save_dataset_streamed(class_info, minimum_images, hdf5_fname)
 
     total_size = len(class_info) * minimum_images
     return total_size
@@ -245,7 +245,7 @@ class QuickDrawGenerator(Sequence):
         hdf5_path,
         segments,
         categorical=False,
-        batch_size=2048,
+        batch_size=constants.batch_size,
         predict_only=False,
         **kwargs,
     ):

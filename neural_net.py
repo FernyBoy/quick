@@ -247,9 +247,17 @@ def train_network(prefix):
         name = constants.classification_name()
         prediction_filename = constants.data_filename(name, es=None, fold=fold)
         np.save(prediction_filename, predicted_labels)
+    history_record = {
+        'metadata': {
+            'batch_size': constants.batch_size,
+            'epochs': epochs,
+            'n_folds': constants.n_folds,
+        },
+        'results': histories,
+    }
     confusion_matrix = confusion_matrix.numpy()
     totals = confusion_matrix.sum(axis=1).reshape(-1, 1)
-    return histories, confusion_matrix / totals
+    return history_record, confusion_matrix / totals
 
 
 def obtain_features(model_prefix, features_prefix, labels_prefix):
