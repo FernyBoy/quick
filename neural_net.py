@@ -25,7 +25,7 @@ from keras.layers import (
     LeakyReLU,
     Flatten,
     Reshape,
-    Conv2DTranspose,
+    UpSampling2D,
     BatchNormalization,
     LayerNormalization,
     SpatialDropout2D,
@@ -111,16 +111,16 @@ def get_decoder(domain):
     filters = domain // initial_divisor
     dense = Dense(width * width * filters, activation='relu')(input_mem)
     output = Reshape((width, width, filters))(dense)
-    dropout = 0.2
+    # dropout = 0.2
     for i in range(2):
-        trans = Conv2DTranspose(
-            kernel_size=3, strides=2, padding='same', activation='relu', filters=filters
-        )(output)
-        output = SpatialDropout2D(dropout)(trans)
-        dropout /= 2.0
+        output = UpSampling2D(size=(2, 2))(output)
+        output = Conv2D(filters, (3, 3), padding='same')(output)
+        output = BatchNormalization()(output)  # Optional in decoder
+        output = LeakyReLU(alpha=0.2)(output)
+        # output = SpatialDropout2D(dropout)(output)
+        # dropout /= 2.0
         filters = filters // iter_divisor
-        output = BatchNormalization()(output)
-    output = Conv2DTranspose(
+    output = Conv2D(
         filters=filters, kernel_size=3, strides=1, activation='sigmoid', padding='same'
     )(output)
     return input_mem, output
