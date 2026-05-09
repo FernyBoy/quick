@@ -183,6 +183,10 @@ def train_network(prefix):
             encoded = encoder(input_data)
             decoded = decoder(encoded)
             classified = classifier(encoded)
+
+            decoder_weight_var = tf.Variable(0.0, dtype=tf.float32, trainable=False)
+            warmup_cb = DecoderWeightScheduler(decoder_weight_var, linear_warmup)
+
             model = Model(
                 inputs=input_data,
                 outputs={'classifier': classified, 'decoder': decoded},
@@ -192,7 +196,7 @@ def train_network(prefix):
                 optimizer=tf.keras.optimizers.Adam(
                     learning_rate=1e-3
                 ),  # Learning rate for a batch size of 2048
-                loss_weights={'classifier': 1, 'decoder': 0.5},
+                loss_weights={'classifier': 1, 'decoder': decoder_weight_var},
                 metrics={'classifier': 'accuracy', 'decoder': rmse},
             )
             model.summary()
@@ -225,7 +229,7 @@ def train_network(prefix):
             # batch_size=constants.batch_size,
             epochs=epochs,
             validation_data=validating_gen,
-            callbacks=[early_stopping, lr_reducer],
+            callbacks=[early_stopping, lr_reducer, warmup_cb],
             verbose=2,
         )
         histories.append(history)
@@ -292,3 +296,26 @@ def obtain_features(model_prefix, features_prefix, labels_prefix):
             print('Saving features and labels ...')
             np.save(features_filename, features)
             np.save(labels_filename, labels)
+
+
+class DecoderWeightScheduler(tf.keras.callbacks.Callback):
+    def __init__(self, weight_var, schedule_fn):
+        super(DecoderWeightScheduler, self).__init__()
+        self.weight_var = weight_var
+        self.schedule_fn = schedule_fn
+
+    def on_epoch_begin(self, epoch, logs=None):
+        new_weight = self.schedule_fn(epoch)
+        # Use assign to update the tensor value without re-compiling
+        self.weight_var.assign(new_weight)
+        print(f'\n - current_decoder_weight: {self.weight_var.numpy():.4f}')
+
+
+def linear_warmup(epoch):
+    start_weight = 0.0
+    end_weight = 10.0
+    warmup_epochs = 80  # Reach full weight by epoch, then keep it constant
+
+    if epoch < warmup_epochs:
+        return start_weight + (end_weight - start_weight) * (epoch / warmup_epochs)
+    return end_weight
