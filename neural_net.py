@@ -39,7 +39,7 @@ patience = 10
 truly_training_percentage = 0.80
 
 
-def conv_block(entry, layers, filters, dropout, first_block=False):
+def conv_block(entry, layers, filters, dropout, first_block=False, pooling=True):
     conv = None
     for i in range(layers):
         if first_block:
@@ -55,9 +55,13 @@ def conv_block(entry, layers, filters, dropout, first_block=False):
                 kernel_size=3, padding='same', activation='relu', filters=filters
             )(entry)
         entry = BatchNormalization()(conv)
-    pool = MaxPool2D(pool_size=2, strides=2, padding='same')(entry)
-    drop = SpatialDropout2D(dropout)(pool)
-    return drop
+    output = (
+        entry
+        if not pooling
+        else MaxPool2D(pool_size=2, strides=2, padding='same')(entry)
+    )
+    output = SpatialDropout2D(dropout)(output)
+    return output
 
 
 # The number of layers defined in get_encoder.
@@ -67,20 +71,20 @@ encoder_nlayers = 40
 def get_encoder(domain):
     dropout = 0.1
     input_data = Input(shape=(dataset.rows, dataset.columns, 1))
-    filters = domain // 16
+    filters = domain // 8
     output = conv_block(input_data, 2, filters, dropout, first_block=True)
     filters *= 2
     dropout += 0.025
     output = conv_block(output, 2, filters, dropout)
     filters *= 2
     dropout += 0.025
-    output = conv_block(output, 3, filters, dropout)
-    filters *= 2
-    dropout += 0.025
-    output = conv_block(output, 3, filters, dropout)
-    filters *= 2
-    dropout += 0.025
-    output = conv_block(output, 3, filters, dropout)
+    output = conv_block(output, 3, filters, dropout, pooling=False)
+    # filters *= 2
+    # dropout += 0.025
+    # output = conv_block(output, 3, filters, dropout)
+    # filters *= 2
+    # dropout += 0.025
+    # output = conv_block(output, 3, filters, dropout)
 
     # --- THE FEATURE BOOSTER ---
     # We add a 2*domain-filter block here to capture fine-grained textures.
@@ -95,7 +99,7 @@ def get_encoder(domain):
 
     output = Flatten()(output)  # 2*domain
     output = Dense(constants.domain, name='domain_layer')(output)  # STILL 256
-    output = LayerNormalization()(output)
+    # output = LayerNormalization()(output)
     return input_data, output
 
 
@@ -314,7 +318,7 @@ class DecoderWeightScheduler(tf.keras.callbacks.Callback):
 def linear_warmup(epoch):
     start_weight = 0.0
     end_weight = 10.0
-    warmup_epochs = 80  # Reach full weight by epoch, then keep it constant
+    warmup_epochs = 160  # Reach full weight by epoch, then keep it constant
 
     if epoch < warmup_epochs:
         return start_weight + (end_weight - start_weight) * (epoch / warmup_epochs)
