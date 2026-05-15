@@ -27,7 +27,7 @@ from keras.layers import (
     Reshape,
     UpSampling2D,
     BatchNormalization,
-    LayerNormalization,
+    # LayerNormalization,
     SpatialDropout2D,
 )
 from keras.callbacks import EarlyStopping, ReduceLROnPlateau
@@ -97,7 +97,7 @@ def get_encoder(domain):
     # output = SpatialDropout2D(0.2)(output)
     # --------------------------------------
 
-    output = Flatten()(output)  
+    output = Flatten()(output)
     # output = Dense(constants.domain, name='domain_layer')(output)
     # output = LayerNormalization()(output)
     return input_data, output
@@ -185,16 +185,26 @@ def train_network(prefix):
             decoder = Model(input_dec, output_dec, name='decoder')
             decoder.summary()
             encoded = encoder(input_data)
-            decoded = decoder(encoded)
+            # decoded = decoder(encoded)
             classified = classifier(encoded)
 
             decoder_weight_var = tf.Variable(0.0, dtype=tf.float32, trainable=False)
             warmup_cb = DecoderWeightScheduler(decoder_weight_var, linear_warmup)
 
-            model = Model(
-                inputs=input_data,
-                outputs={'classifier': classified, 'decoder': decoded},
+            # model = Model(
+            #     inputs=input_data,
+            #     outputs={'classifier': classified, 'decoder': decoded},
+            # )
+            # 2. Instantiate the PerceptionModel
+            model = PerceptionModel(
+                encoder=encoder,
+                classifier=classifier,
+                decoder=decoder,
+                num_classes=constants.network_labels,
+                latent_dim=constants.domain,
+                center_loss_weight=0.1,  # You can adjust this weight as needed
             )
+            model.decoder_weight_var = decoder_weight_var
             model.compile(
                 loss=['categorical_crossentropy', 'mean_squared_error'],
                 optimizer=tf.keras.optimizers.Adam(
@@ -300,6 +310,107 @@ def obtain_features(model_prefix, features_prefix, labels_prefix):
             print('Saving features and labels ...')
             np.save(features_filename, features)
             np.save(labels_filename, labels)
+
+
+class PerceptionModel(Model):
+    def __init__(
+        self,
+        encoder,
+        classifier,
+        decoder,
+        num_classes,
+        latent_dim,
+        center_loss_weight=0.1,
+        alpha=0.5,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.encoder = encoder
+        self.classifier = classifier
+        self.decoder = decoder
+        self.num_classes = num_classes
+        self.latent_dim = latent_dim
+        self.center_loss_weight = center_loss_weight
+        self.alpha = alpha
+
+        # Center Loss Bank
+        self.centers = self.add_weight(
+            name='centers',
+            shape=(num_classes, latent_dim),
+            initializer='zeros',
+            trainable=False,
+        )
+
+    def call(self, inputs):
+        # To match your compile call, we return a dictionary of outputs
+        latent = self.encoder(inputs)
+        return {'classifier': self.classifier(latent), 'decoder': self.decoder(latent)}
+
+    def train_step(self, data):
+        # 1. Unpack data. Your generator returns (images, labels)
+        x, y_labels = data
+
+        # 2. Prepare targets to match your multi-output call()
+        # Keras compiled_loss expects targets for both 'classifier' and 'decoder'
+        targets = {'classifier': y_labels, 'decoder': x}
+
+        with tf.GradientTape() as tape:
+            # 3. Forward Pass
+            y_pred = self(x, training=True)  # Calls self.call() returning the dict
+
+            # 4. Standard Losses (Automatic)
+            # This uses the loss_weights and functions from your .compile() call
+            # It handles 'classifier_loss' and 'decoder_loss' automatically
+            total_loss = self.compiled_loss(
+                targets, y_pred, regularization_losses=self.losses
+            )
+
+            # 5. Center Loss (Manual Perceptual Pressure)
+            latent_features = self.encoder(x, training=True)
+            label_indices = tf.argmax(y_labels, axis=1)
+            batch_centers = tf.gather(self.centers, label_indices)
+            center_loss = tf.reduce_mean(tf.square(latent_features - batch_centers))
+
+            # Add center loss to the total
+            total_loss += self.center_loss_weight * center_loss
+
+        # 6. Optimization
+        gradients = tape.gradient(total_loss, self.trainable_variables)
+        self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+
+        # 7. Correct Center Update (The "Teacher" logic)
+        # Calculate the raw difference between the centers and the batch features
+        delta = batch_centers - latent_features
+
+        # Sum the differences per class.
+        # If a class is missing, its sum defaults to exactly 0.0
+        diff_sum = tf.math.unsorted_segment_sum(delta, label_indices, self.num_classes)
+
+        # Count how many times each class appears in this specific batch
+        counts = tf.math.bincount(
+            label_indices, minlength=self.num_classes, dtype=tf.float32
+        )
+        counts = tf.reshape(counts, [-1, 1])  # Reshape for broadcasting
+
+        # Calculate the safe mean (sum / (count + 1))
+        # Missing classes will evaluate to 0.0 / 1.0 = 0.0 (so their centers won't move)
+        diff_mean = diff_sum / (counts + 1.0)
+
+        # Apply the update
+        self.centers.assign_sub(self.alpha * diff_mean)
+
+        # 8. Update Metrics & Return
+        self.compiled_metrics.update_state(targets, y_pred)
+        results = {m.name: m.result() for m in self.metrics}
+        results['center_loss'] = center_loss
+        return results
+
+    def test_step(self, data):
+        x, y_labels = data
+        targets = {'classifier': y_labels, 'decoder': x}
+        y_pred = self(x, training=False)
+        self.compiled_metrics.update_state(targets, y_pred)
+        return {m.name: m.result() for m in self.metrics}
 
 
 class DecoderWeightScheduler(tf.keras.callbacks.Callback):
