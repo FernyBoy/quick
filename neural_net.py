@@ -355,6 +355,10 @@ class PerceptionModel(Model):
         self.acc_tracker = CategoricalAccuracy(name='classifier_accuracy')
         self.rmse_tracker = RootMeanSquaredError(name='decoder_root_mean_squared_error')
 
+        # Loss objects
+        self.class_loss_fn = tf.keras.losses.CategoricalCrossentropy()
+        self.recon_loss_fn = tf.keras.losses.MeanSquaredError()
+
     @property
     def metrics(self):
         # Tell Keras to pull from our explicit trackers for the progress bar
@@ -372,7 +376,15 @@ class PerceptionModel(Model):
         return {'classifier': self.classifier(latent), 'decoder': self.decoder(latent)}
 
     def train_step(self, data):
-        x, y_labels = data
+        x, y_wrapped = data
+        
+        # Unwrap the labels from Keras's auto-dictionary
+        if isinstance(y_wrapped, dict):
+            y_labels = y_wrapped.get('classifier', y_wrapped)
+        elif isinstance(y_wrapped, (list, tuple)):
+            y_labels = y_wrapped[0]
+        else:
+            y_labels = y_wrapped
 
         # Get the current dynamic decoder weight
         d_weight = getattr(self, 'decoder_weight_var', 1.0)
@@ -383,13 +395,9 @@ class PerceptionModel(Model):
             pred_class = self.classifier(latent_features, training=True)
             pred_recon = self.decoder(latent_features, training=True)
 
-            # 3. Explicit Manual Loss Calculation (No optree crashes)
-            class_loss = tf.reduce_mean(
-                tf.keras.losses.categorical_crossentropy(y_labels, pred_class)
-            )
-            recon_loss = tf.reduce_mean(
-                tf.keras.losses.mean_squared_error(x, pred_recon)
-            )
+            # Uses the instantiated loss objects
+            class_loss = self.class_loss_fn(y_labels, pred_class)
+            recon_loss = self.recon_loss_fn(x, pred_recon)
 
             # Center Loss
             label_indices = tf.argmax(y_labels, axis=1)
@@ -435,11 +443,8 @@ class PerceptionModel(Model):
         pred_class = self.classifier(latent_features, training=False)
         pred_recon = self.decoder(latent_features, training=False)
 
-        # Manual Validation Losses
-        class_loss = tf.reduce_mean(
-            tf.keras.losses.categorical_crossentropy(y_labels, pred_class)
-        )
-        recon_loss = tf.reduce_mean(tf.keras.losses.mean_squared_error(x, pred_recon))
+        class_loss = self.class_loss_fn(y_labels, pred_class)
+        recon_loss = self.recon_loss_fn(x, pred_recon)
 
         # Update Validation Metrics
         self.class_loss_tracker.update_state(class_loss)
