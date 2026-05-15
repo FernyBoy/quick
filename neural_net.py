@@ -31,6 +31,7 @@ from keras.layers import (
     SpatialDropout2D,
 )
 from keras.callbacks import EarlyStopping, ReduceLROnPlateau
+from keras.metrics import Mean, CategoricalAccuracy, RootMeanSquaredError
 import constants
 import dataset
 
@@ -206,7 +207,10 @@ def train_network(prefix):
             )
             model.decoder_weight_var = decoder_weight_var
             model.compile(
-                loss=['categorical_crossentropy', 'mean_squared_error'],
+                loss={
+                    'classifier': 'categorical_crossentropy',
+                    'decoder': 'mean_squared_error',
+                },
                 optimizer=tf.keras.optimizers.Adam(
                     learning_rate=1e-3
                 ),  # Learning rate for a batch size of 2048
@@ -333,7 +337,7 @@ class PerceptionModel(Model):
         self.center_loss_weight = center_loss_weight
         self.alpha = alpha
 
-        # Center Loss Bank
+        # Centers bank
         self.centers = self.add_weight(
             name='centers',
             shape=(num_classes, latent_dim),
@@ -341,76 +345,114 @@ class PerceptionModel(Model):
             trainable=False,
         )
 
+        # 1. Explicit Trackers (Bypassing Keras dictionary mapping entirely)
+        self.loss_tracker = Mean(name='loss')
+        self.class_loss_tracker = Mean(name='classifier_loss')
+        self.recon_loss_tracker = Mean(name='decoder_loss')
+        self.center_loss_tracker = Mean(name='center_loss')
+
+        # Explicit Metrics matching your previous naming
+        self.acc_tracker = CategoricalAccuracy(name='classifier_accuracy')
+        self.rmse_tracker = RootMeanSquaredError(name='decoder_root_mean_squared_error')
+
+    @property
+    def metrics(self):
+        # Tell Keras to pull from our explicit trackers for the progress bar
+        return [
+            self.loss_tracker,
+            self.class_loss_tracker,
+            self.recon_loss_tracker,
+            self.center_loss_tracker,
+            self.acc_tracker,
+            self.rmse_tracker,
+        ]
+
     def call(self, inputs):
-        # To match your compile call, we return a dictionary of outputs
         latent = self.encoder(inputs)
         return {'classifier': self.classifier(latent), 'decoder': self.decoder(latent)}
 
     def train_step(self, data):
-        # 1. Unpack data. Your generator returns (images, labels)
         x, y_labels = data
 
-        # 2. Prepare targets to match your multi-output call()
-        # Keras compiled_loss expects targets for both 'classifier' and 'decoder'
-        targets = {'classifier': y_labels, 'decoder': x}
+        # Get the current dynamic decoder weight
+        d_weight = getattr(self, 'decoder_weight_var', 1.0)
 
         with tf.GradientTape() as tape:
-            # 3. Forward Pass
-            y_pred = self(x, training=True)  # Calls self.call() returning the dict
+            # 2. Forward Pass
+            latent_features = self.encoder(x, training=True)
+            pred_class = self.classifier(latent_features, training=True)
+            pred_recon = self.decoder(latent_features, training=True)
 
-            # 4. Standard Losses (Automatic)
-            # This uses the loss_weights and functions from your .compile() call
-            # It handles 'classifier_loss' and 'decoder_loss' automatically
-            total_loss = self.compiled_loss(
-                targets, y_pred, regularization_losses=self.losses
+            # 3. Explicit Manual Loss Calculation (No optree crashes)
+            class_loss = tf.reduce_mean(
+                tf.keras.losses.categorical_crossentropy(y_labels, pred_class)
+            )
+            recon_loss = tf.reduce_mean(
+                tf.keras.losses.mean_squared_error(x, pred_recon)
             )
 
-            # 5. Center Loss (Manual Perceptual Pressure)
-            latent_features = self.encoder(x, training=True)
+            # Center Loss
             label_indices = tf.argmax(y_labels, axis=1)
             batch_centers = tf.gather(self.centers, label_indices)
             center_loss = tf.reduce_mean(tf.square(latent_features - batch_centers))
 
-            # Add center loss to the total
-            total_loss += self.center_loss_weight * center_loss
+            # Total loss using your dynamic weights
+            total_loss = (
+                class_loss
+                + (d_weight * recon_loss)
+                + (self.center_loss_weight * center_loss)
+            )
 
-        # 6. Optimization
+        # 4. Backpropagation
         gradients = tape.gradient(total_loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
 
-        # 7. Correct Center Update (The "Teacher" logic)
-        # Calculate the raw difference between the centers and the batch features
+        # 5. Safe Center Update
         delta = batch_centers - latent_features
-
-        # Sum the differences per class.
-        # If a class is missing, its sum defaults to exactly 0.0
         diff_sum = tf.math.unsorted_segment_sum(delta, label_indices, self.num_classes)
-
-        # Count how many times each class appears in this specific batch
         counts = tf.math.bincount(
             label_indices, minlength=self.num_classes, dtype=tf.float32
         )
-        counts = tf.reshape(counts, [-1, 1])  # Reshape for broadcasting
-
-        # Calculate the safe mean (sum / (count + 1))
-        # Missing classes will evaluate to 0.0 / 1.0 = 0.0 (so their centers won't move)
+        counts = tf.reshape(counts, [-1, 1])
         diff_mean = diff_sum / (counts + 1.0)
-
-        # Apply the update
         self.centers.assign_sub(self.alpha * diff_mean)
 
-        # 8. Update Metrics & Return
-        self.compiled_metrics.update_state(targets, y_pred)
-        results = {m.name: m.result() for m in self.metrics}
-        results['center_loss'] = center_loss
-        return results
+        # 6. Update Explicit Metrics
+        self.loss_tracker.update_state(total_loss)
+        self.class_loss_tracker.update_state(class_loss)
+        self.recon_loss_tracker.update_state(recon_loss)
+        self.center_loss_tracker.update_state(center_loss)
+        self.acc_tracker.update_state(y_labels, pred_class)
+        self.rmse_tracker.update_state(x, pred_recon)
+
+        return {m.name: m.result() for m in self.metrics}
 
     def test_step(self, data):
         x, y_labels = data
-        targets = {'classifier': y_labels, 'decoder': x}
-        y_pred = self(x, training=False)
-        self.compiled_metrics.update_state(targets, y_pred)
-        return {m.name: m.result() for m in self.metrics}
+
+        # Validation Pass
+        latent_features = self.encoder(x, training=False)
+        pred_class = self.classifier(latent_features, training=False)
+        pred_recon = self.decoder(latent_features, training=False)
+
+        # Manual Validation Losses
+        class_loss = tf.reduce_mean(
+            tf.keras.losses.categorical_crossentropy(y_labels, pred_class)
+        )
+        recon_loss = tf.reduce_mean(tf.keras.losses.mean_squared_error(x, pred_recon))
+
+        # Update Validation Metrics
+        self.class_loss_tracker.update_state(class_loss)
+        self.recon_loss_tracker.update_state(recon_loss)
+        self.acc_tracker.update_state(y_labels, pred_class)
+        self.rmse_tracker.update_state(x, pred_recon)
+
+        # Return everything except total loss and center loss for validation
+        return {
+            m.name: m.result()
+            for m in self.metrics
+            if m.name not in ['loss', 'center_loss']
+        }
 
 
 class DecoderWeightScheduler(tf.keras.callbacks.Callback):
