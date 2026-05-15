@@ -86,7 +86,7 @@ learning_suffixes = [
 
 # Number of columns in memory, which it is also the dimension of the latent representation
 # of the neural networks. It must be divisible by four.
-domain = 384
+domain = 512
 n_folds = 1
 n_jobs = 1
 # Batch size is set considering over 7 million elements of data and

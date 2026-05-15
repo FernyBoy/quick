@@ -71,34 +71,34 @@ encoder_nlayers = 40
 def get_encoder(domain):
     dropout = 0.1
     input_data = Input(shape=(dataset.rows, dataset.columns, 1))
-    filters = domain // 8
+    filters = domain // 16
     output = conv_block(input_data, 2, filters, dropout, first_block=True)
     filters *= 2
     dropout += 0.025
     output = conv_block(output, 2, filters, dropout)
     filters *= 2
     dropout += 0.025
-    output = conv_block(output, 3, filters, dropout, pooling=False)
-    # filters *= 2
-    # dropout += 0.025
-    # output = conv_block(output, 3, filters, dropout)
-    # filters *= 2
-    # dropout += 0.025
-    # output = conv_block(output, 3, filters, dropout)
+    output = conv_block(output, 3, filters, dropout)
+    filters *= 2
+    dropout += 0.025
+    output = conv_block(output, 3, filters, dropout)
+    filters *= 2
+    dropout += 0.025
+    output = conv_block(output, 3, filters, dropout)
 
     # --- THE FEATURE BOOSTER ---
     # We add a 2*domain-filter block here to capture fine-grained textures.
     # But we DO NOT increase the final domain size.
-    dropout *= 2.0
-    output = Conv2D(2 * domain, kernel_size=3, padding='same', activation='relu')(
-        output
-    )
-    output = BatchNormalization()(output)
-    output = SpatialDropout2D(0.4)(output)  # High dropout to prevent memorizing noise
+    # dropout *= 2.0
+    # output = Conv2D(2 * domain, kernel_size=3, padding='same', activation='relu')(
+    #     output
+    # )
+    # output = BatchNormalization()(output)
+    # output = SpatialDropout2D(0.2)(output)
     # --------------------------------------
 
-    output = Flatten()(output)  # 2*domain
-    output = Dense(constants.domain, name='domain_layer')(output)  # STILL 256
+    output = Flatten()(output)  
+    # output = Dense(constants.domain, name='domain_layer')(output)
     # output = LayerNormalization()(output)
     return input_data, output
 
@@ -107,25 +107,25 @@ def get_decoder(domain):
     n = int(math.log2(domain))
     remainer = 3 if (n % 2 != 0) else 2
     initial_divisor = 2 * remainer
-    iter_divisor = 2 ** ((n - remainer) // 2)
+    iter_divisor = 2 ** ((n - remainer) // 2 - 1)
 
     input_mem = Input(shape=(domain,))
-    # With is going to be multiplied by two by each Conv2DTranspose layer in the loop.
+    # Which is going to be multiplied by two by each Conv2DTranspose layer in the loop.
     width = dataset.columns // 4
     filters = domain // initial_divisor
     dense = Dense(width * width * filters, activation='relu')(input_mem)
     output = Reshape((width, width, filters))(dense)
-    # dropout = 0.2
+    dropout = 0.1
     for i in range(2):
+        filters = filters // iter_divisor
         output = UpSampling2D(size=(2, 2))(output)
         output = Conv2D(filters, (3, 3), padding='same')(output)
         output = BatchNormalization()(output)  # Optional in decoder
         output = LeakyReLU(alpha=0.2)(output)
-        # output = SpatialDropout2D(dropout)(output)
-        # dropout /= 2.0
-        filters = filters // iter_divisor
+        output = SpatialDropout2D(dropout)(output)
+        dropout /= 2.0
     output = Conv2D(
-        filters=filters, kernel_size=3, strides=1, activation='sigmoid', padding='same'
+        filters=1, kernel_size=3, strides=1, activation='sigmoid', padding='same'
     )(output)
     return input_mem, output
 
@@ -144,11 +144,11 @@ def get_classifier(domain):
     dense = Dense(2 * domain)(drop)
     dense = LeakyReLU(negative_slope=0.1)(dense)
     drop = Dropout(0.2)(dense)
-    dense = Dense(domain)(drop)
-    dense = LeakyReLU(negative_slope=0.1)(dense)
-    drop = Dropout(0.2)(dense)
-    dense = Dense(domain // 2)(drop)
-    dense = LeakyReLU(negative_slope=0.1)(dense)
+    # dense = Dense(domain)(drop)
+    # dense = LeakyReLU(negative_slope=0.1)(dense)
+    # drop = Dropout(0.2)(dense)
+    # dense = Dense(domain // 2)(drop)
+    # dense = LeakyReLU(negative_slope=0.1)(dense)
     drop = Dropout(0.2)(dense)
     classification = Dense(
         constants.network_labels, activation='softmax', name='classified'
