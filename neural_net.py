@@ -25,12 +25,13 @@ from keras.layers import (
     LeakyReLU,
     Flatten,
     Reshape,
-    Conv2DTranspose,
+    UpSampling2D,
     BatchNormalization,
-    LayerNormalization,
+    # LayerNormalization,
     SpatialDropout2D,
 )
 from keras.callbacks import EarlyStopping, ReduceLROnPlateau
+from keras.metrics import Mean, CategoricalAccuracy, RootMeanSquaredError
 import constants
 import dataset
 
@@ -39,7 +40,7 @@ patience = 10
 truly_training_percentage = 0.80
 
 
-def conv_block(entry, layers, filters, dropout, first_block=False):
+def conv_block(entry, layers, filters, dropout, first_block=False, pooling=True):
     conv = None
     for i in range(layers):
         if first_block:
@@ -55,9 +56,13 @@ def conv_block(entry, layers, filters, dropout, first_block=False):
                 kernel_size=3, padding='same', activation='relu', filters=filters
             )(entry)
         entry = BatchNormalization()(conv)
-    pool = MaxPool2D(pool_size=2, strides=2, padding='same')(entry)
-    drop = SpatialDropout2D(dropout)(pool)
-    return drop
+    output = (
+        entry
+        if not pooling
+        else MaxPool2D(pool_size=2, strides=2, padding='same')(entry)
+    )
+    output = SpatialDropout2D(dropout)(output)
+    return output
 
 
 # The number of layers defined in get_encoder.
@@ -85,17 +90,17 @@ def get_encoder(domain):
     # --- THE FEATURE BOOSTER ---
     # We add a 2*domain-filter block here to capture fine-grained textures.
     # But we DO NOT increase the final domain size.
-    dropout *= 2.0
-    output = Conv2D(2 * domain, kernel_size=3, padding='same', activation='relu')(
-        output
-    )
-    output = BatchNormalization()(output)
-    output = SpatialDropout2D(0.4)(output)  # High dropout to prevent memorizing noise
+    # dropout *= 2.0
+    # output = Conv2D(2 * domain, kernel_size=3, padding='same', activation='relu')(
+    #     output
+    # )
+    # output = BatchNormalization()(output)
+    # output = SpatialDropout2D(0.2)(output)
     # --------------------------------------
 
-    output = Flatten()(output)  # 2*domain
-    output = Dense(constants.domain, name='domain_layer')(output)  # STILL 256
-    output = LayerNormalization()(output)
+    output = Flatten()(output)
+    # output = Dense(constants.domain, name='domain_layer')(output)
+    # output = LayerNormalization()(output)
     return input_data, output
 
 
@@ -103,25 +108,25 @@ def get_decoder(domain):
     n = int(math.log2(domain))
     remainer = 3 if (n % 2 != 0) else 2
     initial_divisor = 2 * remainer
-    iter_divisor = 2 ** ((n - remainer) // 2)
+    iter_divisor = 2 ** ((n - remainer) // 2 - 1)
 
     input_mem = Input(shape=(domain,))
-    # With is going to be multiplied by two by each Conv2DTranspose layer in the loop.
+    # Which is going to be multiplied by two by each Conv2DTranspose layer in the loop.
     width = dataset.columns // 4
     filters = domain // initial_divisor
     dense = Dense(width * width * filters, activation='relu')(input_mem)
     output = Reshape((width, width, filters))(dense)
-    dropout = 0.2
+    dropout = 0.1
     for i in range(2):
-        trans = Conv2DTranspose(
-            kernel_size=3, strides=2, padding='same', activation='relu', filters=filters
-        )(output)
-        output = SpatialDropout2D(dropout)(trans)
-        dropout /= 2.0
         filters = filters // iter_divisor
-        output = BatchNormalization()(output)
-    output = Conv2DTranspose(
-        filters=filters, kernel_size=3, strides=1, activation='sigmoid', padding='same'
+        output = UpSampling2D(size=(2, 2))(output)
+        output = Conv2D(filters, (3, 3), padding='same')(output)
+        output = BatchNormalization()(output)  # Optional in decoder
+        output = LeakyReLU(alpha=0.2)(output)
+        output = SpatialDropout2D(dropout)(output)
+        dropout /= 2.0
+    output = Conv2D(
+        filters=1, kernel_size=3, strides=1, activation='sigmoid', padding='same'
     )(output)
     return input_mem, output
 
@@ -140,11 +145,11 @@ def get_classifier(domain):
     dense = Dense(2 * domain)(drop)
     dense = LeakyReLU(negative_slope=0.1)(dense)
     drop = Dropout(0.2)(dense)
-    dense = Dense(domain)(drop)
-    dense = LeakyReLU(negative_slope=0.1)(dense)
-    drop = Dropout(0.2)(dense)
-    dense = Dense(domain // 2)(drop)
-    dense = LeakyReLU(negative_slope=0.1)(dense)
+    # dense = Dense(domain)(drop)
+    # dense = LeakyReLU(negative_slope=0.1)(dense)
+    # drop = Dropout(0.2)(dense)
+    # dense = Dense(domain // 2)(drop)
+    # dense = LeakyReLU(negative_slope=0.1)(dense)
     drop = Dropout(0.2)(dense)
     classification = Dense(
         constants.network_labels, activation='softmax', name='classified'
@@ -161,8 +166,8 @@ def train_network(prefix):
         print('Getting the dataset ready...')
         training_gen = dataset.get_training(fold, categorical=True)
         # No shuffling is needed for validation nor testing.
-        validating_gen = dataset.get_validating(fold, categorical=True, shuffle=False)
-        testing_gen = dataset.get_testing(fold, categorical=True, shuffle=False)
+        validating_gen = dataset.get_validating(fold, categorical=True)
+        testing_gen = dataset.get_testing(fold, categorical=True)
         predict_gen = dataset.get_testing(fold, predict_only=True)
 
         rmse = tf.keras.metrics.RootMeanSquaredError()
@@ -181,18 +186,35 @@ def train_network(prefix):
             decoder = Model(input_dec, output_dec, name='decoder')
             decoder.summary()
             encoded = encoder(input_data)
-            decoded = decoder(encoded)
+            # decoded = decoder(encoded)
             classified = classifier(encoded)
-            model = Model(
-                inputs=input_data,
-                outputs={'classifier': classified, 'decoder': decoded},
+
+            decoder_weight_var = tf.Variable(0.0, dtype=tf.float32, trainable=False)
+            warmup_cb = DecoderWeightScheduler(decoder_weight_var, linear_warmup)
+
+            # model = Model(
+            #     inputs=input_data,
+            #     outputs={'classifier': classified, 'decoder': decoded},
+            # )
+            # 2. Instantiate the PerceptionModel
+            model = PerceptionModel(
+                encoder=encoder,
+                classifier=classifier,
+                decoder=decoder,
+                num_classes=constants.network_labels,
+                latent_dim=constants.domain,
+                center_loss_weight=0.1,  # You can adjust this weight as needed
             )
+            model.decoder_weight_var = decoder_weight_var
             model.compile(
-                loss=['categorical_crossentropy', 'mean_squared_error'],
+                loss={
+                    'classifier': 'categorical_crossentropy',
+                    'decoder': 'mean_squared_error',
+                },
                 optimizer=tf.keras.optimizers.Adam(
                     learning_rate=1e-3
                 ),  # Learning rate for a batch size of 2048
-                loss_weights={'classifier': 1, 'decoder': 0.5},
+                loss_weights={'classifier': 1, 'decoder': decoder_weight_var},
                 metrics={'classifier': 'accuracy', 'decoder': rmse},
             )
             model.summary()
@@ -220,16 +242,19 @@ def train_network(prefix):
             verbose=2,
         )
 
-        history = model.fit(
+        history_object = model.fit(
             training_gen,
             # batch_size=constants.batch_size,
             epochs=epochs,
             validation_data=validating_gen,
-            callbacks=[early_stopping, lr_reducer],
+            callbacks=[early_stopping, lr_reducer, warmup_cb],
             verbose=2,
         )
-        histories.append(history)
+        # Extracts only the history of the training from the Keras History object.
+        histories.append(history_object.history)
         history = model.evaluate(testing_gen, return_dict=True)
+        # The history returned by model.evaluate is a dictionary of metric names to values,
+        # simpler than the one returned by model.fit.
         histories.append(history)
         print('Creating the confusion matrix...')
         predicted_labels = np.argmax(full_classifier.predict(predict_gen), axis=1)
@@ -244,12 +269,22 @@ def train_network(prefix):
         encoder.save(constants.encoder_filename(prefix, fold))
         decoder.save(constants.decoder_filename(prefix, fold))
         classifier.save(constants.classifier_filename(prefix, fold))
+        # Saving the centers for later inspection
+        np.save(constants.centers_filename(prefix, fold), model.centers.numpy())
         name = constants.classification_name()
         prediction_filename = constants.data_filename(name, es=None, fold=fold)
         np.save(prediction_filename, predicted_labels)
+    history_record = {
+        'metadata': {
+            'batch_size': constants.batch_size,
+            'epochs': epochs,
+            'n_folds': constants.n_folds,
+        },
+        'results': histories,
+    }
     confusion_matrix = confusion_matrix.numpy()
     totals = confusion_matrix.sum(axis=1).reshape(-1, 1)
-    return histories, confusion_matrix / totals
+    return history_record, confusion_matrix / totals
 
 
 def obtain_features(model_prefix, features_prefix, labels_prefix):
@@ -259,8 +294,7 @@ def obtain_features(model_prefix, features_prefix, labels_prefix):
         model = tf.keras.models.load_model(filename)
 
         # 1. Get Generators (which replace the raw data arrays)
-        # We set predict_only=True so the generator returns ONLY images for model.predict
-        # and it does not shuffle them.
+        # We set predict_only=True so the generator returns ONLY images for model.predict.
         fill_gen = dataset.get_filling(fold, predict_only=True)
         test_gen = dataset.get_testing(fold, predict_only=True)
         settings = [
@@ -285,3 +319,178 @@ def obtain_features(model_prefix, features_prefix, labels_prefix):
             print('Saving features and labels ...')
             np.save(features_filename, features)
             np.save(labels_filename, labels)
+
+
+class PerceptionModel(Model):
+    def __init__(
+        self,
+        encoder,
+        classifier,
+        decoder,
+        num_classes,
+        latent_dim,
+        center_loss_weight=0.1,
+        alpha=0.5,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.encoder = encoder
+        self.classifier = classifier
+        self.decoder = decoder
+        self.num_classes = num_classes
+        self.latent_dim = latent_dim
+        self.center_loss_weight = center_loss_weight
+        self.alpha = alpha
+
+        # Centers bank
+        self.centers = self.add_weight(
+            name='centers',
+            shape=(num_classes, latent_dim),
+            initializer='zeros',
+            trainable=False,
+        )
+
+        # 1. Explicit Trackers (Bypassing Keras dictionary mapping entirely)
+        self.loss_tracker = Mean(name='loss')
+        self.class_loss_tracker = Mean(name='classifier_loss')
+        self.recon_loss_tracker = Mean(name='decoder_loss')
+        self.center_loss_tracker = Mean(name='center_loss')
+
+        # Explicit Metrics matching your previous naming
+        self.acc_tracker = CategoricalAccuracy(name='classifier_accuracy')
+        self.rmse_tracker = RootMeanSquaredError(name='decoder_root_mean_squared_error')
+
+        # Loss objects
+        self.class_loss_fn = tf.keras.losses.CategoricalCrossentropy()
+        self.recon_loss_fn = tf.keras.losses.MeanSquaredError()
+
+    @property
+    def metrics(self):
+        # Tell Keras to pull from our explicit trackers for the progress bar
+        return [
+            self.loss_tracker,
+            self.class_loss_tracker,
+            self.recon_loss_tracker,
+            self.center_loss_tracker,
+            self.acc_tracker,
+            self.rmse_tracker,
+        ]
+
+    def call(self, inputs):
+        latent = self.encoder(inputs)
+        return {'classifier': self.classifier(latent), 'decoder': self.decoder(latent)}
+
+    def train_step(self, data):
+        x, y_wrapped = data
+
+        # Unwrap the labels from Keras's auto-dictionary
+        if isinstance(y_wrapped, dict):
+            y_labels = y_wrapped.get('classifier', y_wrapped)
+        elif isinstance(y_wrapped, (list, tuple)):
+            y_labels = y_wrapped[0]
+        else:
+            y_labels = y_wrapped
+
+        # Get the current dynamic decoder weight
+        d_weight = getattr(self, 'decoder_weight_var', 1.0)
+
+        with tf.GradientTape() as tape:
+            # 2. Forward Pass
+            latent_features = self.encoder(x, training=True)
+            pred_class = self.classifier(latent_features, training=True)
+            pred_recon = self.decoder(latent_features, training=True)
+
+            # Uses the instantiated loss objects
+            class_loss = self.class_loss_fn(y_labels, pred_class)
+            recon_loss = self.recon_loss_fn(x, pred_recon)
+
+            # Center Loss
+            label_indices = tf.argmax(y_labels, axis=1)
+            batch_centers = tf.gather(self.centers, label_indices)
+            center_loss = tf.reduce_mean(tf.square(latent_features - batch_centers))
+
+            # Total loss using your dynamic weights
+            total_loss = (
+                class_loss
+                + (d_weight * recon_loss)
+                + (self.center_loss_weight * center_loss)
+            )
+
+        # 4. Backpropagation
+        gradients = tape.gradient(total_loss, self.trainable_variables)
+        self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+
+        # 5. Safe Center Update
+        delta = batch_centers - latent_features
+        diff_sum = tf.math.unsorted_segment_sum(delta, label_indices, self.num_classes)
+        counts = tf.math.bincount(
+            label_indices, minlength=self.num_classes, dtype=tf.float32
+        )
+        counts = tf.reshape(counts, [-1, 1])
+        diff_mean = diff_sum / (counts + 1.0)
+        self.centers.assign_sub(self.alpha * diff_mean)
+
+        # 6. Update Explicit Metrics
+        self.loss_tracker.update_state(total_loss)
+        self.class_loss_tracker.update_state(class_loss)
+        self.recon_loss_tracker.update_state(recon_loss)
+        self.center_loss_tracker.update_state(center_loss)
+        self.acc_tracker.update_state(y_labels, pred_class)
+        self.rmse_tracker.update_state(x, pred_recon)
+
+        return {m.name: m.result() for m in self.metrics}
+
+    def test_step(self, data):
+        x, y_wrapped = data
+
+        # Unwrap the labels from Keras's auto-dictionary
+        if isinstance(y_wrapped, dict):
+            y_labels = y_wrapped.get('classifier', y_wrapped)
+        elif isinstance(y_wrapped, (list, tuple)):
+            y_labels = y_wrapped[0]
+        else:
+            y_labels = y_wrapped
+
+        # Validation Pass
+        latent_features = self.encoder(x, training=False)
+        pred_class = self.classifier(latent_features, training=False)
+        pred_recon = self.decoder(latent_features, training=False)
+
+        class_loss = self.class_loss_fn(y_labels, pred_class)
+        recon_loss = self.recon_loss_fn(x, pred_recon)
+
+        # Update Validation Metrics
+        self.class_loss_tracker.update_state(class_loss)
+        self.recon_loss_tracker.update_state(recon_loss)
+        self.acc_tracker.update_state(y_labels, pred_class)
+        self.rmse_tracker.update_state(x, pred_recon)
+
+        # Return everything except total loss and center loss for validation
+        return {
+            m.name: m.result()
+            for m in self.metrics
+            if m.name not in ['loss', 'center_loss']
+        }
+
+
+class DecoderWeightScheduler(tf.keras.callbacks.Callback):
+    def __init__(self, weight_var, schedule_fn):
+        super(DecoderWeightScheduler, self).__init__()
+        self.weight_var = weight_var
+        self.schedule_fn = schedule_fn
+
+    def on_epoch_begin(self, epoch, logs=None):
+        new_weight = self.schedule_fn(epoch)
+        # Use assign to update the tensor value without re-compiling
+        self.weight_var.assign(new_weight)
+        print(f'\n - current_decoder_weight: {self.weight_var.numpy():.4f}')
+
+
+def linear_warmup(epoch):
+    start_weight = 0.0
+    end_weight = 10.0
+    warmup_epochs = 160  # Reach full weight by epoch, then keep it constant
+
+    if epoch < warmup_epochs:
+        return start_weight + (end_weight - start_weight) * (epoch / warmup_epochs)
+    return end_weight

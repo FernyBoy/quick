@@ -33,14 +33,12 @@ _TESTING_SEGMENT = 3
 def get_training(
     fold,
     categorical=False,
-    shuffle=True,
     predict_only=False,
 ):
     return _get_segment(
         _TRAINING_SEGMENT,
         fold,
         categorical,
-        shuffle=shuffle,
         predict_only=predict_only,
     )
 
@@ -48,23 +46,20 @@ def get_training(
 def get_validating(
     fold,
     categorical=False,
-    shuffle=True,
     predict_only=False,
 ):
     return _get_segment(
         _VALIDATING_SEGMENT,
         fold,
         categorical,
-        shuffle=shuffle,
         predict_only=predict_only,
     )
 
 
-def get_filling(fold, shuffle=True, predict_only=False):
+def get_filling(fold, predict_only=False):
     return _get_segment(
         _FILLING_SEGMENT,
         fold,
-        shuffle=shuffle,
         predict_only=predict_only,
     )
 
@@ -72,14 +67,12 @@ def get_filling(fold, shuffle=True, predict_only=False):
 def get_testing(
     fold,
     categorical=False,
-    shuffle=True,
     predict_only=False,
 ):
     return _get_segment(
         _TESTING_SEGMENT,
         fold,
         categorical=categorical,
-        shuffle=shuffle,
         predict_only=predict_only,
     )
 
@@ -88,16 +81,16 @@ def _get_segment(
     segment,
     fold,
     categorical=False,
-    shuffle=True,
     predict_only=False,
 ):
-    hdf5_path = os.path.join(constants.data_path, constants.prep_hdf5_fname)
+    hdf5_fname = os.path.join(constants.data_path, constants.prep_hdf5_fname)
 
     # Run the one-time loading/balancing logic if HDF5 doesn't exist
-    if not os.path.exists(hdf5_path):
-        total_size = _load_dataset(constants.data_path)
+    if not os.path.exists(hdf5_fname):
+        dataset_path = os.path.join(constants.data_path, constants.dataset_name)
+        total_size = _load_dataset(dataset_path, hdf5_fname)
     else:
-        with h5py.File(hdf5_path, 'r') as f:
+        with h5py.File(hdf5_fname, 'r') as f:
             total_size = f['labels'].shape[0]
 
     training_size = int(total_size * constants.nn_training_percent)
@@ -128,96 +121,114 @@ def _get_segment(
     else:
         segments = [(p, total_size), (0, q)]
     return QuickDrawGenerator(
-        hdf5_path,
+        hdf5_fname,
         segments,
         categorical=categorical,
         batch_size=constants.batch_size,
-        shuffle=shuffle,
         predict_only=predict_only,
     )
 
 
-def _load_dataset(path):
-    data, labels = _load_quickdraw(path)
-    _save_dataset_as_hdf5(data, labels, path)
-    total_size = data.shape[0]
+def _load_dataset(path, hdf5_fname):
+    """Coordinates the creation of the balanced HDF5 dataset in two passes to minimize RAM usage."""
+    # Scan files to find the minimum images per class without loading data
+    class_info, minimum_images = _scan_dataset_metadata(path)
+
+    # Pass 2: Create the HDF5 and fill it class-by-class
+    _save_dataset_streamed(class_info, minimum_images, hdf5_fname)
+
+    total_size = len(class_info) * minimum_images
     return total_size
 
 
-def _save_dataset_as_hdf5(data, labels, path):
-    """Saves the balanced, shuffled data into a permanent HDF5 container."""
-    data, labels = _shuffle_dataset(data, labels)
-    hdf5_fname = os.path.join(path, constants.prep_hdf5_fname)
-    print(f'Creating HDF5 dataset at {hdf5_fname}...')
-
-    with h5py.File(hdf5_fname, 'w') as f:
-        # We store as uint8 (0-255) to save disk space (7M images = ~5.5GB)
-        # If we stored as float32, it would be ~22GB!
-        f.create_dataset(
-            'images',
-            data=data.astype('uint8'),
-            chunks=(constants.batch_size, 28, 28),  # Store data in batch-sized blocks
-            compression='gzip',
-        )
-        f.create_dataset('labels', data=labels.astype('int32'))
-    print('HDF5 creation complete.')
-
-
-def _load_quickdraw(path):
-    """
-    Loads all .npy QuickDraw files in a directory and assigns numeric labels.
-    Returns:
-        data: ndarray of shape (N, 28, 28)
-        labels: ndarray of integers of shape (N,)
-    It saves the label mapping in CSV file.
-    """
-    print('Loading QuickDraw .npy files...')
+def _scan_dataset_metadata(path):
+    """Determines the minimum images per class using memory-mapping."""
+    print('Scanning QuickDraw metadata...')
     files = [f for f in os.listdir(path) if f.endswith('.npy')]
-    random.shuffle(files)
     if len(files) < constants.network_labels:
-        constants.print_error(
-            f'Only {len(files)} classes found instead of at least {constants.network_labels}.'
+        raise ValueError(
+            f'Not enough classes found in {path}. '
+            f'Expected at least {constants.network_labels}, found {len(files)}.'
         )
-        exit(1)
-    # Only data that is going to be used is included in the dataset.
+    random.shuffle(files)
     files = files[: constants.network_labels]
-    data_list = []
-    labels_list = []
-    label_names = []
-    minimum_images = -1
-    temp_data_list = []
-    temp_labels_list = []
 
-    for label_index, filename in enumerate(files):
+    class_info = []
+    minimum_images = -1
+    label_names = []
+
+    for filename in files:
         full_path = os.path.join(path, filename)
         name = filename.replace('full_numpy_bitmap_', '').replace('.npy', '')
+
+        # mmap_mode='r' allows us to see the shape without loading into RAM
+        images = np.load(full_path, mmap_mode='r')
+        count = images.shape[0]
+
+        if minimum_images == -1 or count < minimum_images:
+            minimum_images = count
+
+        class_info.append({'name': name, 'path': full_path})
         label_names.append(name)
 
-        print(f'Loading {name} from {full_path}...')
-        images = np.load(full_path)
-        if minimum_images == -1:
-            minimum_images = images.shape[0]
-        elif images.shape[0] < minimum_images:
-            minimum_images = images.shape[0]
-        images = images.astype(float).reshape(-1, 28, 28)
-
-        temp_data_list.append(images)
-        temp_labels_list.append(np.full(len(images), label_index, dtype=int))
-
+    # Save the label mapping to a CSV for later reference.
     csv_path = os.path.join(constants.data_path, constants.prep_names_fname)
     with open(csv_path, 'w') as file:
         file.write('\n'.join(label_names))
 
-    print(f'Balancing the dataset to {minimum_images} per class')
-    for data, labels in zip(temp_data_list, temp_labels_list):
-        data_list.append(data[:minimum_images])
-        labels_list.append(labels[:minimum_images])
+    print(f'Balancing dataset to {minimum_images} images per class.')
+    return class_info, minimum_images
 
-    data = np.concatenate(data_list, axis=0)
-    labels = np.concatenate(labels_list, axis=0)
 
-    print(f'Loaded a total of {data.shape[0]} images of {len(label_names)} classes.')
-    return data, labels
+def _save_dataset_streamed(class_info, min_imgs, hdf5_full_name):
+    """Semi-randomizes the dataset by processing chunks from all classes in parallel."""
+    total_size = len(class_info) * min_imgs
+    # Adjust buffer_per_class based on your available RAM
+    buffer_per_class = 10000
+
+    # Pre-map all files to avoid overhead in the loop
+    mmaps = [np.load(info['path'], mmap_mode='r') for info in class_info]
+
+    print(f'Creating Semi-Shuffled HDF5 at {hdf5_full_name}...')
+    with h5py.File(hdf5_full_name, 'w') as f:
+        ds_images = f.create_dataset(
+            'images',
+            shape=(total_size, 28, 28),
+            dtype='uint8',
+            chunks=(constants.batch_size, 28, 28),
+            compression='gzip',
+        )
+        ds_labels = f.create_dataset('labels', shape=(total_size,), dtype='int32')
+
+        write_ptr = 0
+        for start in range(0, min_imgs, buffer_per_class):
+            end = min(start + buffer_per_class, min_imgs)
+            actual_chunk_size = end - start
+
+            chunk_images = []
+            chunk_labels = []
+
+            for i, m in enumerate(mmaps):
+                # Extract slice from memory-mapped file
+                imgs = m[start:end].reshape(-1, 28, 28).astype('uint8')
+                chunk_images.append(imgs)
+                chunk_labels.append(np.full(actual_chunk_size, i, dtype='int32'))
+
+            # Combine and shuffle this specific 'super-chunk' in RAM
+            combined_imgs = np.concatenate(chunk_images, axis=0)
+            combined_lbls = np.concatenate(chunk_labels, axis=0)
+
+            shuffler = np.random.permutation(len(combined_lbls))
+
+            # Write sequentially
+            n_to_write = len(shuffler)
+            ds_images[write_ptr : write_ptr + n_to_write] = combined_imgs[shuffler]
+            ds_labels[write_ptr : write_ptr + n_to_write] = combined_lbls[shuffler]
+
+            write_ptr += n_to_write
+            print(f'Processed {write_ptr}/{total_size} images...')
+
+    print('HDF5 creation complete.')
 
 
 def _shuffle_dataset(data, labels):
@@ -234,8 +245,7 @@ class QuickDrawGenerator(Sequence):
         hdf5_path,
         segments,
         categorical=False,
-        batch_size=2048,
-        shuffle=True,
+        batch_size=constants.batch_size,
         predict_only=False,
         **kwargs,
     ):
@@ -244,11 +254,14 @@ class QuickDrawGenerator(Sequence):
         self.segments = segments
         self.categorical = categorical
         self.batch_size = batch_size
-        self.shuffle = shuffle and not predict_only
         self.predict_only = predict_only
         self.total_samples = sum(end - start for start, end in self.segments)
         self.data_file = None
         self.on_epoch_end()
+
+    @property
+    def num_batches(self):
+        return self.__len__()
 
     def __len__(self):
         return int(np.ceil(self.total_samples / self.batch_size))
@@ -272,8 +285,6 @@ class QuickDrawGenerator(Sequence):
 
         if self.predict_only:
             return data  # Just return the images for prediction
-        if self.shuffle:
-            data, labels = _shuffle_dataset(data, labels)
         # Categorical Conversion (Issue #1)
         if self.categorical:
             # Converts integer labels to one-hot vectors

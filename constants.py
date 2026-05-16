@@ -21,7 +21,8 @@ import re
 import sys
 import numpy as np
 
-data_path = 'data/quick'
+data_path = 'data'
+dataset_name = 'quickdraw'
 run_prefix = 'runs'
 run_path = run_prefix
 n_labels_path = None
@@ -65,6 +66,7 @@ memories_suffix = '-memories'
 encoder_suffix = '-encoder'
 classifier_suffix = '-classifier'
 decoder_suffix = '-decoder'
+centers_suffix = '-centers'
 memory_suffix = '-memory'
 
 data_suffix = '_X'
@@ -84,8 +86,8 @@ learning_suffixes = [
 ]
 
 # Number of columns in memory, which it is also the dimension of the latent representation
-# of the neural networks. It must be a power of two greater than 4.
-domain = 256
+# of the neural networks. It must be divisible by four.
+domain = 512
 n_folds = 1
 n_jobs = 1
 # Batch size is set considering over 7 million elements of data and
@@ -114,8 +116,8 @@ am_testing_percent = nn_testing_percent
 # the memory system. The first one must be a power of two (8 at least) while
 # the second must be a pair number, because in the negation experiment only
 # half of the classes are stored in the memory.
-network_labels = 64
-memory_labels = 64
+network_labels = 256
+memory_labels = 256
 all_memory_labels = range(memory_labels)
 
 
@@ -408,6 +410,10 @@ def classifier_filename(name_prefix, fold):
 
 def decoder_filename(name_prefix, fold):
     return model_filename(name_prefix + decoder_suffix, fold) + '.keras'
+
+
+def centers_filename(name_prefix, fold):
+    return model_filename(name_prefix + centers_suffix, fold) + '.npy'
 
 
 # endregion Functions for naming files for storing neural networks.

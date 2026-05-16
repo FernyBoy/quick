@@ -308,17 +308,18 @@ def load_features_and_labels(threshold, es, fold):
 def save_history(history, prefix, es):
     """Saves the stats of neural networks.
 
-    Neural networks stats may come either as a History object, that includes
-    a History.history dictionary with stats, or directly as a dictionary.
+    History is a list of histories, one per fold. Each one is a dictionary.
     """
-    stats = {}
-    stats['history'] = []
-    for h in history:
-        while not ((type(h) is dict) or (type(h) is list)):
-            h = h.history
-        stats['history'].append(h)
     with open(constants.json_filename(prefix, es), 'w') as outfile:
-        json.dump(stats, outfile)
+        json.dump(history, outfile, indent=4, default=convert_to_serializable)
+
+
+def convert_to_serializable(obj):
+    if isinstance(obj, np.float32):
+        return float(obj)  # Convert np.float32 to regular float
+
+    # Handle other types here if needed
+    return obj
 
 
 def save_conf_matrix(matrix, prefix):
@@ -1128,12 +1129,12 @@ def remember(msize, mfill, es):
 # region Main functionality functions ----------------------------------------------------
 
 
-def create_and_train_network(_):
+def create_and_train_network(es):
     model_prefix = constants.model_name()
     stats_prefix = model_prefix + constants.classifier_suffix
     history, conf_matrix = neural_net.train_network(model_prefix)
-    save_history(history, stats_prefix)
-    save_conf_matrix(conf_matrix, stats_prefix)
+    save_history(history, stats_prefix, es)
+    save_conf_matrix(conf_matrix, stats_prefix, es)
 
 
 def produce_features_from_data(_):
