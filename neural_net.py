@@ -266,6 +266,8 @@ def train_network(prefix):
         encoder.save(constants.encoder_filename(prefix, fold))
         decoder.save(constants.decoder_filename(prefix, fold))
         classifier.save(constants.classifier_filename(prefix, fold))
+        # Saving the centers for later inspection
+        np.save(constants.centers_filename(prefix, fold), model.centers.numpy())
         name = constants.classification_name()
         prediction_filename = constants.data_filename(name, es=None, fold=fold)
         np.save(prediction_filename, predicted_labels)
@@ -377,7 +379,7 @@ class PerceptionModel(Model):
 
     def train_step(self, data):
         x, y_wrapped = data
-        
+
         # Unwrap the labels from Keras's auto-dictionary
         if isinstance(y_wrapped, dict):
             y_labels = y_wrapped.get('classifier', y_wrapped)
@@ -436,7 +438,15 @@ class PerceptionModel(Model):
         return {m.name: m.result() for m in self.metrics}
 
     def test_step(self, data):
-        x, y_labels = data
+        x, y_wrapped = data
+
+        # Unwrap the labels from Keras's auto-dictionary
+        if isinstance(y_wrapped, dict):
+            y_labels = y_wrapped.get('classifier', y_wrapped)
+        elif isinstance(y_wrapped, (list, tuple)):
+            y_labels = y_wrapped[0]
+        else:
+            y_labels = y_wrapped
 
         # Validation Pass
         latent_features = self.encoder(x, training=False)
