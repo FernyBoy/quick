@@ -242,7 +242,7 @@ def train_network(prefix):
             verbose=2,
         )
 
-        history = model.fit(
+        history_object = model.fit(
             training_gen,
             # batch_size=constants.batch_size,
             epochs=epochs,
@@ -250,8 +250,11 @@ def train_network(prefix):
             callbacks=[early_stopping, lr_reducer, warmup_cb],
             verbose=2,
         )
-        histories.append(history)
+        # Extracts only the history of the training from the Keras History object.
+        histories.append(history_object.history)
         history = model.evaluate(testing_gen, return_dict=True)
+        # The history returned by model.evaluate is a dictionary of metric names to values,
+        # simpler than the one returned by model.fit.
         histories.append(history)
         print('Creating the confusion matrix...')
         predicted_labels = np.argmax(full_classifier.predict(predict_gen), axis=1)
