@@ -71,5 +71,9 @@ if __name__ == '__main__':
         raise ValueError('<num_clases> must be a positive integer.')
 
     blob_names = get_blob_names(bucket_name, source_blob_prefix)
+    if num_classes > len(blob_names):
+        raise ValueError(
+            f'<num_clases> must be less than or equal to {len(blob_names)}.'
+        )
     chosen_blob_names = random.sample(blob_names, num_classes)
     download_files(chosen_blob_names)
