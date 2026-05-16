@@ -66,6 +66,7 @@ memories_suffix = '-memories'
 encoder_suffix = '-encoder'
 classifier_suffix = '-classifier'
 decoder_suffix = '-decoder'
+centers_suffix = '-centers'
 memory_suffix = '-memory'
 
 data_suffix = '_X'
@@ -409,6 +410,10 @@ def classifier_filename(name_prefix, fold):
 
 def decoder_filename(name_prefix, fold):
     return model_filename(name_prefix + decoder_suffix, fold) + '.keras'
+
+
+def centers_filename(name_prefix, fold):
+    return model_filename(name_prefix + centers_suffix, fold) + '.npy'
 
 
 # endregion Functions for naming files for storing neural networks.
