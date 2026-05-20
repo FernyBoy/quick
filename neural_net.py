@@ -186,7 +186,7 @@ def train_network(prefix):
             decoder = Model(input_dec, output_dec, name='decoder')
             decoder.summary()
             encoded = encoder(input_data)
-            # decoded = decoder(encoded)
+            decoded = decoder(encoded)
             classified = classifier(encoded)
 
             decoder_weight_var = tf.Variable(0.0, dtype=tf.float32, trainable=False)
@@ -242,7 +242,7 @@ def train_network(prefix):
             verbose=2,
         )
 
-        history_object = model.fit(
+        training_history_object = model.fit(
             training_gen,
             # batch_size=constants.batch_size,
             epochs=epochs,
@@ -251,15 +251,18 @@ def train_network(prefix):
             verbose=2,
         )
         # Extracts only the history of the training from the Keras History object.
-        histories.append(history_object.history)
-        history = model.evaluate(testing_gen, return_dict=True)
+        # Extract the actual dictionary and convert NumPy values to Python floats
+        training_history_dict = {
+            k: [float(val) for val in v]
+            for k, v in training_history_object.history.items()
+        }
         # The history returned by model.evaluate is a dictionary of metric names to values,
         # simpler than the one returned by model.fit.
-        histories.append(history)
-        print('Creating the confusion matrix...')
+        evaluation_history_dict = model.evaluate(testing_gen, return_dict=True)
         predicted_labels = np.argmax(full_classifier.predict(predict_gen), axis=1)
         # Retrieve True Labels directly from HDF5 using generator indices
         true_labels = predict_gen.get_all_labels()
+        print('Creating the confusion matrix...')
         confusion_matrix += tf.math.confusion_matrix(
             true_labels,
             predicted_labels,
@@ -274,6 +277,12 @@ def train_network(prefix):
         name = constants.classification_name()
         prediction_filename = constants.data_filename(name, es=None, fold=fold)
         np.save(prediction_filename, predicted_labels)
+        history = {
+            'fold': fold,
+            'training': training_history_dict,
+            'evaluation': evaluation_history_dict,  # Already a dict due to return_dict=True
+        }
+        histories.append(history)
     history_record = {
         'metadata': {
             'batch_size': constants.batch_size,
