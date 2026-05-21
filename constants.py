@@ -16,7 +16,8 @@
 import csv
 import os
 
-# os.environ['CUDA_VISIBLE_DEVICES']='0'
+# We are using GPU 1
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 import re
 import sys
 import numpy as np

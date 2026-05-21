@@ -322,7 +322,7 @@ def convert_to_serializable(obj):
     return obj
 
 
-def save_conf_matrix(matrix, prefix):
+def save_conf_matrix(matrix, prefix, es):
     name = prefix + constants.matrix_suffix
     plot_conf_matrix(matrix, range(matrix.shape[0]), range(matrix.shape[1]), name, None)
     filename = constants.data_filename(name)
