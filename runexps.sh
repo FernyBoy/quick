@@ -18,8 +18,8 @@ networks_and_features() {
 SECONDS=0
 echo "Starting at `date`"
 
-# networks_and_features
-for num_classes in 2 4 8 16 24 32 48 64; do
+networks_and_features
+for num_classes in 2 4 8 16 32 64 96 128 192 256; do
     python eam.py -e 1 --num-classes="$num_classes" --runpath="$runpath" && \
     python eam.py -e 2 --num-classes="$num_classes" --runpath="$runpath" && \
     # python eam.py -r --num-classes="$num_classes" --runpath="$runpath" && \
