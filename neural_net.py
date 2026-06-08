@@ -313,11 +313,22 @@ def obtain_features(model_prefix, features_prefix, labels_prefix):
         ]
 
         for gen, suffix in settings:
-            print(f'Generating features for {suffix}...')
-            features = model.predict(
-                gen,
-                verbose=1,
+            print(
+                f'Generating features for {suffix} (batch-by-batch to prevent OOM)...'
             )
+
+            features = []
+            # Reset generator if it's a reusable iterator/sequence
+            for batch in gen:
+                # Safe unwrap in case the generator returns a tuple (x, y) or just x
+                x_batch = batch[0] if isinstance(batch, (tuple, list)) else batch
+
+                # Predict on a single batch and immediately force it into CPU memory as a NumPy array
+                batch_feats = model.predict_on_batch(x_batch)
+                features.append(np.array(batch_feats))
+
+            # Safely concatenate all batches together entirely on the CPU
+            features = np.concatenate(features, axis=0)
             labels = gen.get_all_labels()
             features_filename = constants.shared_data_filename(
                 features_prefix + suffix, fold
