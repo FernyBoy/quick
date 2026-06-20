@@ -250,16 +250,40 @@ def plot_memory(memory: AssociativeMemory, name, es, fold, sub_dir=None):
 def filter_by_labels(
     filling_features, filling_labels, testing_features, testing_labels, threshold, es
 ):
+    """Filter labels to the valid range for the current experiment.
+
+    filling_features is kept as a memmap; only valid row *indices* are returned
+    so that no copy of the (potentially huge) filling array is ever made.
+    testing_features is small enough to copy in full.
+    """
     mask = testing_labels < constants.memory_labels
     testing_labels = testing_labels[mask]
-    testing_features = testing_features[mask]
-    mask = filling_labels < threshold
-    filling_labels = filling_labels[mask]
-    filling_features = filling_features[mask]
-    return filling_features, filling_labels, testing_features, testing_labels
+    testing_features = testing_features[mask]  # small, copy is fine
+    fill_mask = filling_labels < threshold
+    filling_labels = filling_labels[fill_mask]
+    filling_indices = np.where(fill_mask)[0]
+    return filling_features, filling_indices, filling_labels, testing_features, testing_labels
 
 
 def load_features_and_labels(threshold, es, fold):
+    """Load features and labels for the given fold.
+
+    Returns
+    -------
+    filling_features : numpy.memmap
+        Memory-mapped view of the filling features file.  Never fully loaded
+        into RAM; slices are read on demand.
+    filling_indices : ndarray of int
+        Row indices into filling_features that survive the label threshold
+        filter.  All downstream code works with these indices rather than
+        copying the rows.
+    filling_labels : ndarray
+        Filtered filling labels (small, kept in RAM).
+    testing_features : ndarray
+        Filtered testing features (small, kept in RAM).
+    testing_labels : ndarray
+        Filtered testing labels (small, kept in RAM).
+    """
     suffix = constants.filling_suffix
     filling_features_filename = constants.features_name(es) + suffix
     filling_features_filename = constants.shared_data_filename(
@@ -280,24 +304,35 @@ def load_features_and_labels(threshold, es, fold):
         testing_labels_filename, fold
     )
 
-    filling_features = np.load(filling_features_filename)
+    # filling_features is memory-mapped so that only the pages actually
+    # accessed are loaded into RAM.
+    filling_features = np.load(filling_features_filename, mmap_mode='r')
     filling_labels = np.load(filling_labels_filename)
+    # testing data is much smaller — load it fully.
     testing_features = np.load(testing_features_filename)
     testing_labels = np.load(testing_labels_filename)
 
-    # Reduces the original data to only the classes for the current experiment,
-    # given the number of labels.
-    filling_features, filling_labels, testing_features, testing_labels = (
-        filter_by_labels(
-            filling_features,
-            filling_labels,
-            testing_features,
-            testing_labels,
-            threshold,
-            es,
-        )
+    return filter_by_labels(
+        filling_features,
+        filling_labels,
+        testing_features,
+        testing_labels,
+        threshold,
+        es,
     )
-    return filling_features, filling_labels, testing_features, testing_labels
+
+
+def iter_filling_chunks(filling_features, filling_indices, batch_size=None):
+    """Yield successive batches of filling rows selected by filling_indices.
+
+    Each yielded chunk is a freshly-read in-memory array of shape
+    (batch_size, domain); only one chunk lives in RAM at a time.
+    """
+    if batch_size is None:
+        batch_size = constants.batch_size
+    for start in range(0, len(filling_indices), batch_size):
+        chunk_idx = filling_indices[start : start + batch_size]
+        yield filling_features[chunk_idx]
 
 
 # endregion Auxiliary functions ----------------------------------------------------------
@@ -546,6 +581,7 @@ def ams_size_results(
     msize,
     domain,
     filling_features,
+    filling_indices,
     testing_features,
     filling_labels,
     testing_labels,
@@ -563,15 +599,20 @@ def ams_size_results(
         msize,
         es,
     )
-    # Round the values after filtering them.
-    qd = qudeq.QuDeq(filling_features, percentiles=constants.use_percentiles)
-    ff_rounded = qd.quantize(filling_features, msize)
+    # Compute quantization bounds incrementally — no full copy of filling_features.
+    qd = qudeq.QuDeq.from_stream(
+        iter_filling_chunks(filling_features, filling_indices),
+        percentiles=constants.use_percentiles,
+    )
     tf_rounded = qd.quantize(testing_features, msize)
-    print(f'Features to register shape = {ff_rounded.shape}')
+    print(f'Features to register: {len(filling_indices)} x {filling_features.shape[1]}')
     print(f'Testing features shape = {tf_rounded.shape}')
     print('--------------------------------------------')
     print('Filling the memory...', end='', flush=True)
-    eam.batch_register(ff_rounded)
+    # Quantize and register one chunk at a time to avoid materialising the full
+    # quantized filling array.
+    for chunk in iter_filling_chunks(filling_features, filling_indices):
+        eam.batch_register(qd.quantize(chunk, msize))
     print('done.')
 
     # Recognize test data.
@@ -611,11 +652,11 @@ def test_memory_sizes(domain, es):
 
         # Loads the full set of features and labels.
         threshold = constants.memory_labels // es.experiment_number
-        filling_features, filling_labels, testing_features, testing_labels = (
+        filling_features, filling_indices, filling_labels, testing_features, testing_labels = (
             load_features_and_labels(threshold, es, fold)
         )
         print('Filtered data:')
-        print(f'\tFilling data shape: {filling_features.shape}')
+        print(f'\tFilling data: {len(filling_indices)} rows x {filling_features.shape[1]} cols')
         print(f'\tTesting data shape: {testing_features.shape}')
         print(f'\tTotal of labels = {len(np.unique(testing_labels))}')
 
@@ -630,6 +671,7 @@ def test_memory_sizes(domain, es):
                 msize,
                 domain,
                 filling_features,
+                filling_indices,
                 testing_features,
                 filling_labels,
                 testing_labels,
@@ -760,15 +802,18 @@ def test_filling_per_fold(mem_size, domain, es, fold):
     classifier = tf.keras.models.load_model(filename)
 
     threshold = constants.memory_labels // es.experiment_number
-    filling_features, filling_labels, testing_features, testing_labels = (
+    filling_features, filling_indices, filling_labels, testing_features, testing_labels = (
         load_features_and_labels(threshold, es, fold)
     )
     print('Filtered data:')
-    print(f'Filling data shape: {filling_features.shape}')
+    print(f'Filling data: {len(filling_indices)} rows x {filling_features.shape[1]} cols')
     print(f'Testing data shape: {testing_features.shape}')
 
-    qd = qudeq.QuDeq(filling_features, percentiles=constants.use_percentiles)
-    filling_features = qd.quantize(filling_features, mem_size)
+    # Compute quantization bounds by streaming filling data in chunks.
+    qd = qudeq.QuDeq.from_stream(
+        iter_filling_chunks(filling_features, filling_indices),
+        percentiles=constants.use_percentiles,
+    )
     testing_features = qd.quantize(testing_features, mem_size)
 
     total = len(filling_labels)
@@ -782,7 +827,9 @@ def test_filling_per_fold(mem_size, domain, es, fold):
 
     start = 0
     for percent, end in zip(percents, steps):
-        features = filling_features[start:end]
+        # Read only this percent slice from the mmap and quantize on the fly.
+        chunk_idx = filling_indices[start:end]
+        features = qd.quantize(filling_features[chunk_idx], mem_size)
         print(f'Filling from {start} to {end}.')
         behaviour, entropy = test_filling_percent(
             eam,
@@ -796,18 +843,11 @@ def test_filling_per_fold(mem_size, domain, es, fold):
             threshold,
             es,
         )
-        # A list of tuples (position, label, features)
-        # fold_recalls += recalls
-        # An array with average entropy per step.
         fold_entropies.append(entropy)
-        # Arrays with precision, and recall.
         fold_precision.append(behaviour[constants.precision_idx])
         fold_recall.append(behaviour[constants.recall_idx])
         fold_accuracy.append(behaviour[constants.accuracy_idx])
         start = end
-    # Use this to plot current state of memories
-    # as heatmaps.
-    # plot_memories(ams, es, fold)
     fold_entropies = np.array(fold_entropies)
     fold_precision = np.array(fold_precision)
     fold_recall = np.array(fold_recall)
@@ -1100,24 +1140,31 @@ def remember(msize, mfill, es):
         [memories_prefix, recognition_prefix, weights_prefix, classif_prefix],
     ]
 
+    threshold = constants.memory_labels // es.experiment_number
     for fold in range(constants.n_folds):
         print(f'Running remembering for fold: {fold}')
         # Load filling and testing features and labels
-        filling_features, _, testing_features, _ = load_features_and_labels(es, fold)
+        filling_features, filling_indices, _, testing_features, _ = (
+            load_features_and_labels(threshold, es, fold)
+        )
 
-        qd = qudeq.QuDeq(filling_features, percentiles=constants.use_percentiles)
-        filling_rounded = qd.quantize(filling_features, msize)
+        # Compute quantization bounds by streaming filling data in chunks.
+        qd = qudeq.QuDeq.from_stream(
+            iter_filling_chunks(filling_features, filling_indices),
+            percentiles=constants.use_percentiles,
+        )
         testing_rounded = qd.quantize(testing_features, msize)
 
-        # Create the memory and fill it
+        # Create the memory and fill it incrementally.
         eam = AssociativeMemory(
             constants.domain,
             msize,
             es,
         )
-        end = round(len(filling_features) * mfill / 100.0)
-        eam.batch_register(filling_rounded[:end])
-        print(f'Memory of size {msize} filled with {end} elements for fold {fold}')
+        fill_count = round(len(filling_indices) * mfill / 100.0)
+        for chunk in iter_filling_chunks(filling_features, filling_indices[:fill_count]):
+            eam.batch_register(qd.quantize(chunk, msize))
+        print(f'Memory of size {msize} filled with {fill_count} elements for fold {fold}')
 
         for features, prefixes in zip([testing_rounded], prefixes_list):
             remember_with_sigma(eam, features, prefixes, msize, qd, es, fold)

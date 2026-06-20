@@ -33,6 +33,40 @@ class QuDeq:
                 f'Minima and maxima have the same value in position(s): {idx.tolist()}'
             )
 
+    @classmethod
+    def from_stream(cls, chunk_iterator, percentiles=False):
+        """Initialize by streaming chunks rather than loading all data at once.
+
+        Percentile mode is not supported for streaming because per-chunk
+        percentiles do not compose into global percentiles.  Use the regular
+        constructor (which requires the full corpus) when percentiles=True.
+        """
+        if percentiles:
+            raise ValueError(
+                'Percentile mode requires the full corpus; '
+                'use QuDeq(corpus, percentiles=True) instead.'
+            )
+        minima = None
+        maxima = None
+        for chunk in chunk_iterator:
+            c_min = np.min(chunk, axis=0)
+            c_max = np.max(chunk, axis=0)
+            if minima is None:
+                minima = c_min.copy()
+                maxima = c_max.copy()
+            else:
+                np.minimum(minima, c_min, out=minima)
+                np.maximum(maxima, c_max, out=maxima)
+        obj = cls.__new__(cls)
+        obj.minima = minima
+        obj.maxima = maxima
+        idx = np.where(minima == maxima)[0]
+        if len(idx) > 0:
+            print(
+                f'Minima and maxima have the same value in position(s): {idx.tolist()}'
+            )
+        return obj
+
     def get_min_max(self, a: np.ndarray, percentiles: bool):
         """Produces desirable minimum and maximum values for features."""
         if percentiles:
