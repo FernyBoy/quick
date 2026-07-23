@@ -3,11 +3,12 @@ Latentverse analysis of the latent space.
 
 Usage:
   run_latentverse.py -h | --help
-  run_latentverse.py <data_fname> <labels_fname>
+  run_latentverse.py [--percent=<percent>] <data_fname> <labels_fname>
 
 Options:
   -h        Show this screen.
   --help    Show this screen.
+  --percent=<percent>  Percent of data to use [default: 100]
 """
 
 from __future__ import annotations
@@ -151,8 +152,15 @@ def main(data, labels) -> int:
 
 if __name__ == '__main__':
     args = docopt(__doc__)
+    percent = float(args['--percent'])
+    if not (0 < percent <= 100):
+        raise ValueError(f'--percent must be in (0, 100], got {percent}')
+    print(f'Using {percent:.1f}% of the data')
     data_fname = args['<data_fname>']
     labels_fname = args['<labels_fname>']
     data = np.load(data_fname)
     labels = np.load(labels_fname)
+    size = int(len(data) * percent / 100)
+    data = data[:size]
+    labels = labels[:size]
     sys.exit(main(data, labels))
